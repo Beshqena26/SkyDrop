@@ -1540,6 +1540,267 @@ document.getElementById('menuBetHistory').onclick=()=>{
 document.querySelectorAll('.mo').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
 document.addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();if(document.querySelector('.mo.open')||document.getElementById('avatarModal').classList.contains('open'))return;if(G.phase==='FREEFALL'||(G.phase==='EXPLODE'&&G.pilot.ejected))betAction(1);else if(G.phase==='BETTING')betAction(1)}});
 
+// ======================== CHAT ========================
+var CHAT_MSGS=[
+  'gl everyone 🍀','lets gooo 🚀','ez win','cashout at 2x trust me',
+  'who else lost last round 😭','this game is rigged lol','nah its fair check the hash',
+  'just hit 10x 🔥🔥','playing safe today','all in','anyone here from turkey?',
+  'gg','bruh i was 0.01 away','hold hold hold','i love this game',
+  'parachute always opens early smh','3x and out','im up $200 today',
+  'dont be greedy','rip my balance','nice one!','how do you guys cashout so fast',
+  'autobet is the way','im scared to bet high','just vibes','1x gang 😂',
+  'sky drop best game','who needs sleep when you have skydrop','send it 🚀',
+  'bruh','lmaooo','chill round','that was close','im out gg',
+  'any tips?','bet small win big','patience is key','wow that crash was brutal',
+  'my heart cant take this','imagine hitting 100x','one more round then i sleep',
+  'ok last round for real this time','nope still playing 😅','addicted ngl'
+];
+var _chatHistory=[];
+function _chatTime(){var d=new Date();return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0')}
+function _addChatMsg(name,avatar,avatarBg,text,isMe){
+  var msg={name:name,avatar:avatar,bg:avatarBg,text:text,time:_chatTime(),isMe:!!isMe};
+  _chatHistory.push(msg);
+  if(_chatHistory.length>80)_chatHistory.shift();
+  _renderChat('chatMessages');
+  _renderChat('mChatMessages');
+}
+function _renderChat(containerId){
+  var el=document.getElementById(containerId);if(!el)return;
+  var wasBottom=el.scrollHeight-el.scrollTop-el.clientHeight<40;
+  el.innerHTML='';
+  _chatHistory.forEach(function(m){
+    var div=document.createElement('div');div.className='chat-msg';
+    div.innerHTML='<div class="chat-av" style="background:'+m.bg+'">'+m.avatar+'</div>'+
+      '<div class="chat-body"><div class="chat-name'+(m.isMe?' me':'')+'">'+m.name+'</div>'+
+      '<div class="chat-text">'+(m.text.indexOf('__GIF__')===0?(m.text.slice(7).indexOf('http')===0?'<div class="chat-gif-msg"><img src="'+m.text.slice(7)+'" alt="GIF" loading="lazy"></div>':'<div class="chat-gif-msg">'+m.text.slice(7)+'</div>'):m.text.replace(/</g,'&lt;').replace(/>/g,'&gt;'))+'</div>'+
+      '<div class="chat-time">'+m.time+'</div></div>';
+    el.appendChild(div);
+  });
+  if(wasBottom)el.scrollTop=el.scrollHeight;
+}
+function toggleMobileChat(){
+  var isDesktop=window.innerWidth>=900;
+  if(isDesktop){
+    var panel=document.getElementById('chatPanel');
+    panel.classList.toggle('open');
+    if(panel.classList.contains('open'))_renderChat('chatMessages');
+  }else{
+    var ov=document.getElementById('mobileChatOverlay');
+    ov.classList.toggle('open');
+    if(ov.classList.contains('open'))_renderChat('mChatMessages');
+  }
+}
+function sendChat(){
+  var inp=document.getElementById('chatInput');
+  var mInp=document.getElementById('mChatInput');
+  var text=(inp&&inp.value.trim())||(mInp&&mInp.value.trim())||'';
+  if(!text)return;
+  _addChatMsg(_selectedName,_selectedAvatar,'rgba(76,175,80,.12)',text,true);
+  if(inp)inp.value='';
+  if(mInp)mInp.value='';
+  // Close any open pickers
+  document.querySelectorAll('.chat-picker.open').forEach(function(p){p.classList.remove('open')});
+}
+// ======================== EMOJI & GIF PICKER ========================
+// GIPHY Integration — get your FREE key at https://developers.giphy.com/dashboard/
+var GIPHY_KEY='21pOlJ0A6HPx3V3aoQ1rmyYIhLZSw6Wd';
+var _gifDebounce=null;
+var _gifLoading=false;
+var EMOJI_DATA={
+  'Smileys':['😀','😂','🤣','😊','😎','🥳','😍','🤑','😭','😱','🤯','🥺','😤','🫣','😏','🤡','💀','👻','😈','🤝'],
+  'Gestures':['👍','👎','👏','🙌','🤞','✌️','🤟','💪','👊','🫰','🫶','🙏','👋','🤙','💅','🖕'],
+  'Objects':['🔥','💎','💰','💵','🎰','🎲','🃏','🏆','🎯','⚡','💣','🚀','🪂','✈️','💸','🎉','🎊','🍀'],
+  'Animals':['🦅','🐺','🦁','🐉','🦈','🦊','🐻','🦇','🐍','🦂','🐊','🦍'],
+  'Hearts':['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','❤️‍🔥','💝','💗']
+};
+var GIF_STICKERS=[
+  {emoji:'🚀💨',label:'Launch'},
+  {emoji:'💰🤑💰',label:'Money'},
+  {emoji:'🔥🔥🔥',label:'Fire'},
+  {emoji:'💎👐💎',label:'Diamond Hands'},
+  {emoji:'🎉🥳🎊',label:'Party'},
+  {emoji:'😭💔😭',label:'Cry'},
+  {emoji:'🤯💥🤯',label:'Mind Blown'},
+  {emoji:'👑✨👑',label:'King'},
+  {emoji:'🪂⬇️💀',label:'Crash'},
+  {emoji:'📈🟢📈',label:'Moon'},
+  {emoji:'📉🔴📉',label:'Dump'},
+  {emoji:'🍀🤞🍀',label:'Lucky'},
+  {emoji:'💪😤💪',label:'Strong'},
+  {emoji:'🐋💰🐋',label:'Whale'},
+  {emoji:'⏰💣⏰',label:'Ticking'},
+  {emoji:'🎰🎰🎰',label:'Jackpot'},
+  {emoji:'👀👀👀',label:'Watching'},
+  {emoji:'🫡🫡🫡',label:'Salute'}
+];
+var _pickerMode='emoji'; // 'emoji' or 'gif'
+var _pickerTargets={'chatPicker':'chatInput','mChatPicker':'mChatInput'};
+
+function togglePicker(pickerId,forceMode){
+  var pk=document.getElementById(pickerId);
+  if(pk.classList.contains('open')&&(!forceMode||forceMode===_pickerMode)){
+    pk.classList.remove('open');return;
+  }
+  if(forceMode)_pickerMode=forceMode;
+  else if(!pk.classList.contains('open'))_pickerMode='emoji';
+  pk.classList.add('open');
+  _updatePickerTabs(pickerId);
+  _populatePicker(pickerId);
+  // clear search
+  var sId=pickerId==='chatPicker'?'pickerSearch':'mPickerSearch';
+  var s=document.getElementById(sId);if(s)s.value='';
+}
+function switchPickerTab(mode,pickerId){
+  pickerId=pickerId||'chatPicker';
+  _pickerMode=mode;
+  _updatePickerTabs(pickerId);
+  _populatePicker(pickerId);
+  var sId=pickerId==='chatPicker'?'pickerSearch':'mPickerSearch';
+  var s=document.getElementById(sId);if(s)s.value='';
+}
+function _updatePickerTabs(pickerId){
+  var pk=document.getElementById(pickerId);if(!pk)return;
+  var tabs=pk.querySelectorAll('.picker-tab');
+  tabs.forEach(function(t){t.classList.toggle('active',t.textContent.indexOf(_pickerMode==='gif'?'GIF':'Emoji')!==-1)});
+}
+function _populatePicker(pickerId,filter){
+  var gridId=pickerId==='chatPicker'?'pickerGrid':'mPickerGrid';
+  var grid=document.getElementById(gridId);if(!grid)return;
+  grid.innerHTML='';
+  filter=(filter||'').toLowerCase();
+  if(_pickerMode==='emoji'){
+    grid.classList.remove('gif-mode');
+    Object.keys(EMOJI_DATA).forEach(function(cat){
+      if(filter&&cat.toLowerCase().indexOf(filter)===-1){
+        // check individual emojis... just show all if category doesn't match
+        var emojis=EMOJI_DATA[cat];
+        emojis.forEach(function(e){
+          // no text filter for emojis, show all unless filter is set
+        });
+        if(filter)return; // skip non-matching categories when filtering
+      }
+      // Category label
+      var lbl=document.createElement('div');
+      lbl.style.cssText='grid-column:1/-1;font-size:9px;color:var(--dim);font-weight:700;letter-spacing:1px;padding:4px 0 2px;font-family:Oxanium,sans-serif';
+      lbl.textContent=cat.toUpperCase();
+      grid.appendChild(lbl);
+      EMOJI_DATA[cat].forEach(function(em){
+        var btn=document.createElement('button');btn.className='picker-item';btn.textContent=em;
+        btn.onclick=function(){_insertEmoji(pickerId,em)};
+        grid.appendChild(btn);
+      });
+    });
+    if(!filter){return}
+    // If filter active, re-populate showing all matching
+    grid.innerHTML='';
+    Object.keys(EMOJI_DATA).forEach(function(cat){
+      EMOJI_DATA[cat].forEach(function(em){
+        var btn=document.createElement('button');btn.className='picker-item';btn.textContent=em;
+        btn.onclick=function(){_insertEmoji(pickerId,em)};
+        grid.appendChild(btn);
+      });
+    });
+  }else{
+    grid.classList.add('gif-mode');
+    if(GIPHY_KEY){
+      _fetchGiphy(filter,pickerId);
+    }else{
+      // Fallback: emoji stickers when no API key
+      GIF_STICKERS.forEach(function(g){
+        if(filter&&g.label.toLowerCase().indexOf(filter)===-1)return;
+        var btn=document.createElement('button');btn.className='picker-gif';
+        btn.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:2px"><span style="font-size:28px">'+g.emoji+'</span><span style="font-size:8px;color:var(--dim);letter-spacing:.5px">'+g.label+'</span></div>';
+        btn.onclick=function(){_sendGif(pickerId,g.emoji)};
+        grid.appendChild(btn);
+      });
+    }
+  }
+}
+function _fetchGiphy(query,pickerId){
+  var gridId=pickerId==='chatPicker'?'pickerGrid':'mPickerGrid';
+  var grid=document.getElementById(gridId);if(!grid)return;
+  _gifLoading=true;
+  grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--dim);font-size:11px;padding:20px">Loading GIFs…</div>';
+  var url=query
+    ?'https://api.giphy.com/v1/gifs/search?api_key='+GIPHY_KEY+'&q='+encodeURIComponent(query)+'&limit=21&rating=g&lang=en'
+    :'https://api.giphy.com/v1/gifs/trending?api_key='+GIPHY_KEY+'&limit=21&rating=g';
+  fetch(url).then(function(r){return r.json()}).then(function(res){
+    _gifLoading=false;grid.innerHTML='';
+    if(!res.data||!res.data.length){
+      grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--dim);font-size:11px;padding:20px">No GIFs found</div>';return;
+    }
+    res.data.forEach(function(gif){
+      var btn=document.createElement('button');btn.className='picker-gif-real';
+      var img=document.createElement('img');
+      img.src=gif.images.fixed_width_small.url;
+      img.alt=gif.title||'';img.loading='lazy';
+      btn.appendChild(img);
+      btn.onclick=function(){_sendGif(pickerId,gif.images.fixed_height.url)};
+      grid.appendChild(btn);
+    });
+    // GIPHY attribution
+    var attr=document.createElement('div');
+    attr.style.cssText='grid-column:1/-1;text-align:center;padding:6px 0 2px;opacity:.4';
+    attr.innerHTML='<img src="https://giphy.com/static/img/poweredby_giphy.png" alt="Powered by GIPHY" style="height:14px">';
+    grid.appendChild(attr);
+  }).catch(function(){
+    _gifLoading=false;
+    grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--dim);font-size:11px;padding:20px">Failed to load GIFs</div>';
+  });
+}
+function filterPicker(pickerId){
+  pickerId=pickerId||'chatPicker';
+  var sId=pickerId==='chatPicker'?'pickerSearch':'mPickerSearch';
+  var val=document.getElementById(sId).value;
+  if(_pickerMode==='gif'&&GIPHY_KEY){
+    clearTimeout(_gifDebounce);
+    _gifDebounce=setTimeout(function(){_fetchGiphy(val,pickerId)},400);
+  }else{
+    _populatePicker(pickerId,val);
+  }
+}
+function _insertEmoji(pickerId,emoji){
+  var inputId=_pickerTargets[pickerId];
+  var inp=document.getElementById(inputId);if(!inp)return;
+  inp.value+=emoji;
+  inp.focus();
+}
+function _sendGif(pickerId,gifData){
+  document.getElementById(pickerId).classList.remove('open');
+  _addChatMsg(_selectedName,_selectedAvatar,'rgba(76,175,80,.12)','__GIF__'+gifData,true);
+}
+// Init pickers on load
+(function(){_populatePicker('chatPicker');_populatePicker('mChatPicker')})();
+
+// Enter key to send
+document.addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&(document.activeElement&&(document.activeElement.id==='chatInput'||document.activeElement.id==='mChatInput'))){
+    e.preventDefault();sendChat();
+  }
+});
+// Close mobile chat on overlay tap
+document.getElementById('mobileChatOverlay').addEventListener('click',function(e){if(e.target===this)toggleMobileChat()});
+// Fake chat messages from bots
+var _chatBotInterval=setInterval(function(){
+  if(Math.random()>.4)return;
+  var av=randomAvatar();
+  var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);
+  var msg;
+  if(Math.random()<.15){var g=GIF_STICKERS[Math.floor(Math.random()*GIF_STICKERS.length)];msg='__GIF__'+g.emoji}
+  else{msg=CHAT_MSGS[Math.floor(Math.random()*CHAT_MSGS.length)]}
+  _addChatMsg(id,av.emoji,av.bg,msg,false);
+},4000+Math.random()*3000);
+// Seed a few initial messages
+(function(){
+  for(var i=0;i<5;i++){
+    var av=randomAvatar();
+    var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);
+    _chatHistory.push({name:id,avatar:av.emoji,bg:av.bg,text:CHAT_MSGS[Math.floor(Math.random()*CHAT_MSGS.length)],time:_chatTime(),isMe:false});
+  }
+  _renderChat('chatMessages');
+  _renderChat('mChatMessages');
+})();
+
 // === START ===
 [1.45,3.22,1.00,7.88,2.11,1.67,12.55,1.00,4.33,2.89].forEach(function(v){addHist(v)});
 startBettingPhase();

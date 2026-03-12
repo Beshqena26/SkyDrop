@@ -16,6 +16,7 @@
     </div>
     <div class="hdr">
       <div class="bbox"><div class="bicon">$</div><div class="bval" id="bal">1,000.00</div></div>
+      <button class="ibtn chat-hdr-btn" id="chatToggleBtn" onclick="toggleMobileChat()">💬</button>
       <button class="ibtn" id="burgerBtn">☰</button>
     </div>
   </div>
@@ -128,6 +129,56 @@
           <div class="sb-list" id="msbTopList"></div>
         </div>
       </div>
+    </div>
+    <!-- DESKTOP CHAT PANEL (right side) -->
+    <div class="chat-panel" id="chatPanel">
+      <div class="chat-panel-head">💬 CHAT</div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <!-- Picker popup (shared, positioned above input) -->
+      <div class="chat-picker" id="chatPicker">
+        <div class="picker-tabs">
+          <button class="picker-tab active" onclick="switchPickerTab('emoji')">😀 Emoji</button>
+          <button class="picker-tab" onclick="switchPickerTab('gif')">GIF</button>
+        </div>
+        <div class="picker-search">
+          <input type="text" class="picker-search-input" id="pickerSearch" placeholder="Search..." oninput="filterPicker()" autocomplete="off">
+        </div>
+        <div class="picker-grid" id="pickerGrid"></div>
+      </div>
+      <div class="chat-input-row">
+        <button class="chat-icon-btn" onclick="togglePicker('chatPicker')" title="Emoji">😀</button>
+        <button class="chat-icon-btn" onclick="togglePicker('chatPicker','gif')" title="GIF">GIF</button>
+        <input type="text" id="chatInput" class="chat-input" placeholder="Type a message..." maxlength="120" autocomplete="off">
+        <button class="chat-send-btn" onclick="sendChat()">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MOBILE CHAT OVERLAY -->
+<div class="mobile-chat-overlay" id="mobileChatOverlay">
+  <div class="mobile-chat-panel">
+    <div class="mobile-chat-head">
+      <span>💬 CHAT</span>
+      <button class="mc" onclick="toggleMobileChat()" style="position:static;padding:6px">✕</button>
+    </div>
+    <div class="chat-messages" id="mChatMessages"></div>
+    <!-- Mobile picker popup -->
+    <div class="chat-picker" id="mChatPicker">
+      <div class="picker-tabs">
+        <button class="picker-tab active" onclick="switchPickerTab('emoji','mChatPicker')">😀 Emoji</button>
+        <button class="picker-tab" onclick="switchPickerTab('gif','mChatPicker')">GIF</button>
+      </div>
+      <div class="picker-search">
+        <input type="text" class="picker-search-input" id="mPickerSearch" placeholder="Search..." oninput="filterPicker('mChatPicker')" autocomplete="off">
+      </div>
+      <div class="picker-grid" id="mPickerGrid"></div>
+    </div>
+    <div class="chat-input-row">
+      <button class="chat-icon-btn" onclick="togglePicker('mChatPicker')" title="Emoji">😀</button>
+      <button class="chat-icon-btn" onclick="togglePicker('mChatPicker','gif')" title="GIF">GIF</button>
+      <input type="text" id="mChatInput" class="chat-input" placeholder="Type a message..." maxlength="120" autocomplete="off">
+      <button class="chat-send-btn" onclick="sendChat()">➤</button>
     </div>
   </div>
 </div>
