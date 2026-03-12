@@ -23,8 +23,8 @@ canvas{position:fixed;top:0;left:0;z-index:1}
 .live-dot{width:6px;height:6px;background:var(--dng);border-radius:50%;animation:lp 1s infinite;display:inline-block}
 @keyframes lp{0%,100%{opacity:1}50%{opacity:.3}}
 .live-tag{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;color:var(--dng);display:flex;align-items:center;gap:3px;border:1px solid rgba(255,34,85,.2);padding:2px 6px;border-radius:4px;background:rgba(255,34,85,.06)}
-.hs{display:flex;gap:3px;padding:3px 10px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;-webkit-overflow-scrolling:touch;background:rgba(14,20,32,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.03)}.hs::-webkit-scrollbar{display:none}
-.hc{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0;animation:ci .4s cubic-bezier(.34,1.56,.64,1)}
+.hs{display:flex;gap:4px;padding:4px 10px;overflow-x:auto;flex-shrink:0;scrollbar-width:none;-webkit-overflow-scrolling:touch;background:rgba(14,20,32,.95);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.03)}.hs::-webkit-scrollbar{display:none}
+.hc{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;animation:ci .4s cubic-bezier(.34,1.56,.64,1)}
 @keyframes ci{from{transform:translateY(-20px) scale(0);opacity:0}to{transform:translateY(0) scale(1);opacity:1}}
 .hc.g{background:rgba(76,175,80,.12);color:var(--acc);border:1px solid rgba(76,175,80,.15);box-shadow:0 0 8px rgba(76,175,80,.08)}
 .hc.y{background:rgba(255,170,0,.1);color:var(--wrn);border:1px solid rgba(255,170,0,.12);box-shadow:0 0 8px rgba(255,170,0,.06)}
@@ -124,10 +124,14 @@ canvas{position:fixed;top:0;left:0;z-index:1}
 .sb-content .sb-list{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.08) transparent}
 .ri{text-align:center;font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--dim);padding:1px 0 2px;letter-spacing:1px}
 .mo{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:flex-end;justify-content:center}.mo.open{display:flex}
-.mx{background:#0f1520;border:1px solid rgba(76,175,80,.2);border-radius:14px 14px 0 0;padding:16px 14px calc(16px + var(--sab));width:100%;max-height:80vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.mx{background:#0f1520;border:1px solid rgba(76,175,80,.2);border-radius:14px 14px 0 0;padding:16px 14px calc(16px + var(--sab));width:100%;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.mx.has-footer{padding-bottom:0;display:flex;flex-direction:column;overflow:hidden}
+.mx.has-footer .modal-scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px}
+.mx.has-footer .modal-footer{background:#0f1520;padding:12px 14px calc(16px + var(--sab));border-top:1px solid var(--border);flex-shrink:0}
 .mx::before{content:'';display:block;width:36px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:0 auto 12px}
 .mt2{font-family:'Oxanium',sans-serif;font-size:14px;font-weight:800;color:var(--acc);letter-spacing:2px;margin-bottom:10px}
-.mc{float:right;background:none;border:none;color:var(--dim);font-size:22px;cursor:pointer;padding:10px;margin:-6px -6px 0 0}.mc:active{color:var(--dng)}
+.mx{position:relative}
+.mc{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--dim);font-size:22px;cursor:pointer;padding:10px;z-index:2}.mc:active{color:var(--dng)}
 .ms{margin-bottom:10px}.ms h4{font-family:'Oxanium',sans-serif;font-size:10px;font-weight:700;color:#00ccff;letter-spacing:2px;margin-bottom:4px}.ms p{font-size:12px;color:var(--dim);line-height:1.6}
 .hd2{font-family:'JetBrains Mono',monospace;font-size:8px;background:rgba(76,175,80,.05);border:1px solid var(--border);border-radius:5px;padding:5px 6px;color:var(--acc);word-break:break-all;margin-top:4px}
 .sg{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}
@@ -168,7 +172,7 @@ canvas{position:fixed;top:0;left:0;z-index:1}
   .mobile-sb{display:none}
   .hd{padding:10px 20px}.logo{font-size:22px}.bval{font-size:16px}.ibtn{width:36px;height:36px;font-size:16px}
   .bbox{padding:6px 12px;border-radius:10px}.bicon{width:18px;height:18px;font-size:9px}
-  .hs{padding:4px 20px;gap:4px}.hc{font-size:10px;padding:2px 7px;border-radius:5px}
+  .hs{padding:4px 20px;gap:5px}.hc{font-size:12px;padding:3px 8px;border-radius:5px}
   .main-row{flex:1;flex-direction:row;overflow:hidden}
   .sidebar{display:flex;flex-direction:column;width:280px;min-width:280px;background:var(--panel);border-right:1px solid var(--border);overflow:hidden}
   .game-area{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden}
@@ -196,7 +200,7 @@ canvas{position:fixed;top:0;left:0;z-index:1}
   .bp-add-btn{width:24px;height:24px;font-size:14px}
   .bp-remove-btn{width:24px;height:24px;font-size:11px}
   .ri{font-size:7px;padding:1px 0 2px}
-  .mo{align-items:center}.mx{border-radius:14px;max-width:520px;padding:24px 28px;max-height:80vh}
+  .mo{align-items:center}.mx{border-radius:14px;max-width:520px;padding:24px 28px;max-height:80vh}.mx.has-footer .modal-footer{padding:12px 0 24px}
 }
 </style>
 </head>
@@ -559,9 +563,10 @@ canvas{position:fixed;top:0;left:0;z-index:1}
 </div>
 
 <div class="mo" id="avatarModal">
-  <div class="mx" style="max-width:440px">
+  <div class="mx has-footer" style="max-width:440px">
     <button class="mc" onclick="document.getElementById('avatarModal').classList.remove('open')">✕</button>
     <div class="mt2">🎭 CHOOSE AVATAR</div>
+    <div class="modal-scroll">
     <div style="font-size:11px;color:var(--dim);margin-bottom:12px;line-height:1.5">Pick your avatar and set a nickname before you start playing.</div>
 
     <div style="text-align:center;margin:12px 0">
@@ -576,12 +581,14 @@ canvas{position:fixed;top:0;left:0;z-index:1}
     <div id="avatarGrid2" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px"></div>
 
     <div style="font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:6px;font-weight:600">ANIMALS</div>
-    <div id="avatarGrid3" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px"></div>
+    <div id="avatarGrid3" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px"></div>
+    </div>
 
-    <div style="font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:6px;font-weight:600">NICKNAME</div>
-    <input type="text" id="avatarNameInput" maxlength="12" placeholder="Player" value="Player" style="width:100%;padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;font-family:'Chakra Petch',sans-serif;font-size:15px;font-weight:600;color:var(--txt);outline:none;margin-bottom:12px;text-align:center;box-sizing:border-box">
-
-    <button id="avatarSaveBtn" onclick="saveAvatar()" style="width:100%;padding:14px;border:none;border-radius:10px;background:linear-gradient(135deg,#43a047,#66bb6a);color:#fff;font-family:'Oxanium',sans-serif;font-size:15px;font-weight:800;letter-spacing:1px;cursor:pointer;box-shadow:0 3px 12px rgba(76,175,80,.25);transition:.2s">SAVE</button>
+    <div class="modal-footer">
+      <div style="font-size:10px;color:var(--dim);letter-spacing:1px;margin-bottom:6px;font-weight:600">NICKNAME</div>
+      <input type="text" id="avatarNameInput" maxlength="12" placeholder="Player" value="Player" style="width:100%;padding:10px 12px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;font-family:'Chakra Petch',sans-serif;font-size:15px;font-weight:600;color:var(--txt);outline:none;margin-bottom:12px;text-align:center;box-sizing:border-box">
+      <button id="avatarSaveBtn" onclick="saveAvatar()" style="width:100%;padding:14px;border:none;border-radius:10px;background:linear-gradient(135deg,#43a047,#66bb6a);color:#fff;font-family:'Oxanium',sans-serif;font-size:15px;font-weight:800;letter-spacing:1px;cursor:pointer;box-shadow:0 3px 12px rgba(76,175,80,.25);transition:.2s">SAVE</button>
+    </div>
   </div>
 </div>
 
@@ -875,9 +882,9 @@ var G={
 };
 
 // ======================== AVATAR PICKER ========================
-var AVATAR_PILOTS=['🧑‍✈️','👨‍✈️','👩‍✈️','🪖','🧑‍🚀','👨‍🚀','👩‍🚀','🤿','🏂','🪂','🧗','🏄'];
-var AVATAR_ICONS=['💀','🎯','🔥','💎','🎮','👾','🛡️','⚡','🚀','💣','🏆','👑'];
-var AVATAR_ANIMALS=['🦅','🐺','🦁','🐉','🦈','🐍','🦊','🐻','🦇','🐆','🦂','🕷️'];
+var AVATAR_PILOTS=['🧑‍✈️','👨‍✈️','👩‍✈️','🧑‍🚀','🪂','🏂','🪖','🏄'];
+var AVATAR_ICONS=['💀','🔥','💎','⚡','🚀','👑','🎯','👾'];
+var AVATAR_ANIMALS=['🦅','🐺','🦁','🐉','🦈','🦊','🐻','🦇'];
 var AVATAR_COLORS=['#ff8800','#e53935','#8e24aa','#1e88e5','#00acc1','#43a047','#ffb300','#f4511e','#6d4c41','#546e7a','#d81b60','#5e35b1'];
 
 var _selectedAvatar='🧑‍✈️';
