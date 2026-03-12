@@ -270,13 +270,17 @@ var sfx={
 };
 
 // ======================== GAME STATE ========================
+// ======================== LOCAL STORAGE HELPERS ========================
+function _loadSaved(key,fallback){try{var v=localStorage.getItem('skydrop_'+key);return v!==null?JSON.parse(v):fallback}catch(e){return fallback}}
+function _save(key,val){try{localStorage.setItem('skydrop_'+key,JSON.stringify(val))}catch(e){}}
+
 var G={
-  balance:1000,
+  balance:_loadSaved('balance',1000),
   bets:[{amount:1,placed:false,out:false,cashMult:0},{amount:1,placed:false,out:false,cashMult:0}],
   phase:'INIT',phaseTimer:0,
   mult:1.0,crashPt:2.0,speed:0,
-  alt:0,MAX_ALT:50000,roundNum:0,history:[],
-  totR:0,totW:0,totWg:0,totP:0,bestC:0,hiCr:0,betHistory:[],
+  alt:0,MAX_ALT:50000,roundNum:0,history:_loadSaved('history',[]),
+  totR:_loadSaved('totR',0),totW:_loadSaved('totW',0),totWg:0,totP:_loadSaved('totP',0),bestC:_loadSaved('bestC',0),hiCr:_loadSaved('hiCr',0),betHistory:_loadSaved('betHistory',[]),
   rocket:{x:-60,y:-80,vx:35,vy:8,angle:0,curvePath:[],targetAlt:300},
   pilot:{x:0,y:0,vx:0,vy:0,chuteOpen:false,ejected:false,spin:0,ejectTime:0,seatFlame:0,_phase:'',_seatY:0,_bodyAngle:0,_drogueOpen:false,_canopyBlown:false},
   camera:{y:0,cx:-100,shake:0,zoom:1,zoomTarget:1,zoomX:0,zoomY:0},
@@ -414,7 +418,7 @@ function syncMobileSb(){
 }
 
 // Previous round data
-var _prevRoundData=[];
+var _prevRoundData=_loadSaved('prevRound',[]);
 function savePrevRound(){
   try{
   _prevRoundData=[];
@@ -427,12 +431,14 @@ function savePrevRound(){
     var win=cells[3]?cells[3].textContent:'';
     _prevRoundData.push({name:name,bet:bet,x:x,win:win,won:rows[i].classList.contains('won')});
   }
+  _save('prevRound',_prevRoundData);
   }catch(e){}
 }
 function populatePrevTab(){
   try{
   var list=document.getElementById('prevList');list.innerHTML='';
-  var prevCrash=G.history.length>0?G.history[0]:null;
+  var h0=G.history.length>0?G.history[0]:null;
+  var prevCrash=h0?(typeof h0==='number'?h0:(h0.v||0)):null;
   document.getElementById('prevCrash').textContent=prevCrash?'Crashed @ '+prevCrash.toFixed(2)+'×':'—';
   document.getElementById('prevCrash').style.color=prevCrash&&prevCrash<2?'var(--dng)':prevCrash&&prevCrash>=5?'var(--acc)':'var(--wrn)';
   var totalWin=0;
@@ -448,12 +454,13 @@ function populatePrevTab(){
 }
 
 // Top wins (accumulated across session)
-var _topWins=[];
+var _topWins=_loadSaved('topWins',[]);
 function addTopWin(name,bet,mult,win){
   try{
   _topWins.push({name:name,bet:bet,mult:mult,win:win});
   _topWins.sort(function(a,b){return b.win-a.win});
   if(_topWins.length>20)_topWins.length=20;
+  _save('topWins',_topWins);
   populateTopTab();
   }catch(e){}
 }
@@ -488,7 +495,7 @@ function populateTopTab(){
 
 // ======================== UI HELPERS ========================
 function $(id){return document.getElementById(id)}
-function updBal(){try{$('bal').textContent=G.balance.toFixed(2)}catch(e){}}
+function updBal(){try{$('bal').textContent=G.balance.toFixed(2);_save('balance',G.balance)}catch(e){}}
 function setSt(t,c){try{var e=$('stl');e.textContent=t;e.className='stl show '+c}catch(e){}}
 function setCine(m,s,c){try{$('cineMain').textContent=m;$('cineSub').textContent=s||'';$('cine').className='cine show '+(c||'')}catch(e){}}
 function hideCine(){try{$('cine').classList.remove('show')}catch(e){}}
@@ -504,6 +511,8 @@ function addHist(v){try{
   var pNames=G.fPlayers?G.fPlayers.slice(0,3).map(function(p){return p.name||'Player'}):[];
   G.history.unshift({v:v,round:rnd,players:pCount,totalBet:tBet,result:myResult,resultColor:myResultColor,time:timeStr,serverSeed:srvSeed,hash:hash,playerNames:pNames});
   if(G.history.length>16)G.history.pop();
+  _save('history',G.history);
+  _save('totR',G.totR);_save('totW',G.totW);_save('totP',G.totP);_save('bestC',G.bestC);_save('hiCr',G.hiCr);_save('betHistory',G.betHistory);
   var e=$('hs'),c=v>=5?'g':v>=1.5?'y':'r',d=document.createElement('div');d.className='hc '+c;d.textContent=v.toFixed(2)+'×';d.style.cursor='pointer';
   d.onclick=(function(info){return function(){showRoundInfo(info)}})(G.history[0]);
   e.insertBefore(d,e.firstChild);while(e.children.length>16)e.removeChild(e.lastChild)
@@ -1802,9 +1811,25 @@ var _chatBotInterval=setInterval(function(){
 })();
 
 // === START ===
-[1.45,3.22,1.00,7.88,2.11,1.67,12.55,1.00,4.33,2.89].forEach(function(v){addHist(v)});
+// Restore saved history bar, or seed with defaults on first visit
+(function(){
+  if(G.history.length>0){
+    // Restore history bar from saved data
+    var e=$('hs');
+    G.history.slice().reverse().forEach(function(info){
+      var c=info.v>=5?'g':info.v>=1.5?'y':'r';
+      var d=document.createElement('div');d.className='hc '+c;d.textContent=info.v.toFixed(2)+'×';d.style.cursor='pointer';
+      d.onclick=(function(i){return function(){showRoundInfo(i)}})(info);
+      e.insertBefore(d,e.firstChild);while(e.children.length>16)e.removeChild(e.lastChild);
+    });
+  }else{
+    [1.45,3.22,1.00,7.88,2.11,1.67,12.55,1.00,4.33,2.89].forEach(function(v){addHist(v)});
+  }
+})();
+updBal();
 startBettingPhase();
 populateTopTab();
+if(_prevRoundData.length>0)populatePrevTab();
 // Show avatar picker on first visit
 if(!sessionStorage.getItem('skydrop_avatar_set')){
   setTimeout(function(){openAvatarModal()},600);
