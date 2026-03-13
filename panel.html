@@ -174,7 +174,6 @@ tr:hover td{background:var(--default-100)}
     <button class="tab-btn active" data-tab="settings" onclick="switchTab('settings')">Settings</button>
     <button class="tab-btn" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</button>
     <button class="tab-btn" data-tab="rounds" onclick="switchTab('rounds')">Round History</button>
-    <button class="tab-btn" data-tab="bets" onclick="switchTab('bets')">Bet History</button>
   </div>
 
   <!-- ═══════ SETTINGS ═══════ -->
@@ -329,30 +328,13 @@ tr:hover td{background:var(--default-100)}
     </div>
     <div class="table-wrap" id="roundHistWrap">
       <div class="table-scroll">
-        <table><thead><tr><th>#</th><th>Crash</th><th>Players</th><th>Total Bet</th><th>Result</th><th>Time</th></tr></thead>
+        <table><thead><tr><th>#</th><th>Crash</th><th>Players</th><th>Total Bet</th><th>House P/L</th><th>Time</th></tr></thead>
         <tbody id="roundHistBody"></tbody></table>
       </div>
     </div>
     <div class="empty-msg" id="roundEmpty" style="display:none">No round history yet. Play some rounds first.</div>
   </div>
 
-  <!-- ═══════ BET HISTORY ═══════ -->
-  <div class="tab-panel" id="tab-bets">
-    <div class="sec-bar">
-      <div class="sec-title">Bet History</div>
-      <div class="sec-right">
-        <span class="count-chip" id="betCountLabel">0 bets</span>
-        <button class="btn btn-flat btn-sm" onclick="loadBetHistory()">Refresh</button>
-      </div>
-    </div>
-    <div class="table-wrap" id="betHistWrap">
-      <div class="table-scroll">
-        <table><thead><tr><th>Round</th><th>Player</th><th>Bet</th><th>Cashout</th><th>Win</th><th>P/L</th><th>Time</th></tr></thead>
-        <tbody id="betHistBody"></tbody></table>
-      </div>
-    </div>
-    <div class="empty-msg" id="betEmpty" style="display:none">No bet history yet. Place some bets first.</div>
-  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -396,7 +378,7 @@ function switchTab(n){
   document.querySelectorAll('.tab-btn').forEach(function(t){t.classList.remove('active')});
   var p=document.getElementById('tab-'+n);if(p)p.classList.add('active');
   document.querySelectorAll('.tab-btn').forEach(function(b){if(b.getAttribute('data-tab')===n)b.classList.add('active')});
-  if(n==='dashboard')loadDashboard();if(n==='rounds')loadRoundHistory();if(n==='bets')loadBetHistory();
+  if(n==='dashboard')loadDashboard();if(n==='rounds')loadRoundHistory();
 }
 function _ls(k){try{var v=localStorage.getItem('skydrop_'+k);return v?JSON.parse(v):null}catch(e){return null}}
 
@@ -467,41 +449,19 @@ function _renderRoundHistory(h){
   document.getElementById('roundCountLabel').textContent=h.length+' rounds';
   if(!h.length){bd.innerHTML='';wr.style.display='none';em.style.display='block';return}
   wr.style.display='block';em.style.display='none';
-  var o='';h.forEach(function(r){var c=r.v>=5?'badge-success':r.v>=1.5?'badge-warning':'badge-danger',rs=r.result||'\u2014',rc=rs.indexOf('+')===0?'pnl-pos':rs.indexOf('-')===0?'pnl-neg':'pnl-zero';
-    o+='<tr><td>#'+r.round+'</td><td><span class="badge '+c+'">'+r.v.toFixed(2)+'x</span></td><td>'+r.players+'</td><td>$'+(r.totalBet||0).toFixed(2)+'</td><td class="'+rc+'">'+rs+'</td><td style="color:var(--foreground-400);font-size:12px">'+r.time+'</td></tr>'});
-  bd.innerHTML=o;
-}
-
-function loadBetHistory(){
-  if(typeof FB!=='undefined'&&FB.isOnline()){
-    FB.loadRounds().then(function(rounds){
-      var allBets=[];
-      rounds.forEach(function(r){
-        if(r.bets&&r.bets.length){
-          r.bets.forEach(function(b){
-            allBets.push({round:r.round,name:b.name||'Player',bet:b.bet||0,mult:b.cashMult||0,win:b.win||0,time:r.time,crashPt:r.v});
-          });
-        }
-      });
-      if(allBets.length){_renderBetHistory(allBets)}else{_renderBetHistoryLocal()}
-    });
-  }else{_renderBetHistoryLocal()}
-}
-function _renderBetHistoryLocal(){
-  var bh=_ls('betHistory')||[];
-  var mapped=bh.map(function(b){var ts='\u2014';if(b.time){try{ts=new Date(b.time).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}catch(e){}}return{round:b.round,name:'You',bet:b.bet,mult:b.mult,win:b.win||0,time:ts}});
-  _renderBetHistory(mapped);
-}
-function _renderBetHistory(bets){
-  var bd=document.getElementById('betHistBody'),wr=document.getElementById('betHistWrap'),em=document.getElementById('betEmpty');
-  document.getElementById('betCountLabel').textContent=bets.length+' bets';
-  if(!bets.length){bd.innerHTML='';wr.style.display='none';em.style.display='block';return}
-  wr.style.display='block';em.style.display='none';
-  var o='';bets.forEach(function(b){
-    var p=(b.win||0)-(b.bet||0),pc=p>0?'pnl-pos':p<0?'pnl-neg':'pnl-zero';
-    var ps=p>=0?'+$'+p.toFixed(2):'-$'+Math.abs(p).toFixed(2);
-    var cs=b.win>0?(b.mult||0).toFixed(2)+'x':'BUST',cc=b.win>0?'badge-success':'badge-danger';
-    o+='<tr><td>#'+b.round+'</td><td>'+(b.name||'Player')+'</td><td>$'+(b.bet||0).toFixed(2)+'</td><td><span class="badge '+cc+'">'+cs+'</span></td><td>$'+(b.win||0).toFixed(2)+'</td><td class="'+pc+'">'+ps+'</td><td style="color:var(--foreground-400);font-size:12px">'+(b.time||'\u2014')+'</td></tr>'});
+  var o='';h.forEach(function(r){
+    var c=r.v>=5?'badge-success':r.v>=1.5?'badge-warning':'badge-danger';
+    // Calculate real house profit from embedded bets
+    var totalIn=0,totalOut=0;
+    if(r.bets&&r.bets.length){
+      r.bets.forEach(function(b){totalIn+=b.bet||0;totalOut+=b.win||0});
+    } else {
+      totalIn=r.totalBet||0;
+    }
+    var houseProfit=totalIn-totalOut;
+    var rs=houseProfit>=0?'+$'+houseProfit.toFixed(2):'-$'+Math.abs(houseProfit).toFixed(2);
+    var rc=houseProfit>0?'pnl-pos':houseProfit<0?'pnl-neg':'pnl-zero';
+    o+='<tr><td>#'+r.round+'</td><td><span class="badge '+c+'">'+r.v.toFixed(2)+'x</span></td><td>'+(r.players||0)+'</td><td>$'+totalIn.toFixed(2)+'</td><td class="'+rc+'">'+rs+'</td><td style="color:var(--foreground-400);font-size:12px">'+r.time+'</td></tr>'});
   bd.innerHTML=o;
 }
 
@@ -510,7 +470,6 @@ window.addEventListener('storage',function(e){
   var a=document.querySelector('.tab-panel.active');if(!a)return;
   if(a.id==='tab-dashboard')loadDashboard();
   else if(a.id==='tab-rounds')loadRoundHistory();
-  else if(a.id==='tab-bets')loadBetHistory();
 });
 
 // Load config: Firebase first, localStorage fallback
