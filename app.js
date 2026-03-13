@@ -215,8 +215,12 @@ var SYNC={
   },
 
   // Called when CRASH wait ends — claim next round
+  _claimedRound:0, // prevent double-claiming
   onCrashWaitEnd:function(){
     if(!this.enabled)return false;
+    var next=this.lastRound+1;
+    if(next<=this._claimedRound)return true; // already claimed this round
+    this._claimedRound=next;
     this._startNextRound(this.lastRound);
     return true;
   },
