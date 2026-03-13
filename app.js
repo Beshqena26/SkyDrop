@@ -751,7 +751,7 @@ function populateTopTab(){
   var total=0;
   _topWins.forEach(function(d){
     var r=document.createElement('div');r.className='sb-row won';
-    r.innerHTML='<span class="sb-name">'+_esc(d.name)+'</span><span class="sb-bet">'+_esc(d.bet)+'</span><span class="sb-x" style="color:var(--gld)">'+_esc(d.mult)+'</span><span class="sb-win" style="color:var(--gld)">'+_esc(d.win)+'</span>';
+    r.innerHTML='<span class="sb-name">'+d.name+'</span><span class="sb-bet">'+_esc(d.bet)+'</span><span class="sb-x" style="color:var(--gld)">'+_esc(d.mult)+'</span><span class="sb-win" style="color:var(--gld)">'+_esc(d.win)+'</span>';
     list.appendChild(r);
     total+=parseFloat(d.win)||0;
   });
@@ -764,7 +764,7 @@ function populateTopTab(){
   for(var i=0;i<8;i++){
     var av=randomAvatar();
     var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);
-    var nm='<span class="sb-av" style="background:'+av.bg+'">'+av.emoji+'</span>'+id;
+    var nm='<span class="sb-av" style="background:'+_esc(av.bg)+'">'+_esc(av.emoji)+'</span>'+_esc(id);
     var bt=fakeBetAmt();
     var ml=(2+Math.random()*30).toFixed(2);
     var wn=(parseFloat(bt)*parseFloat(ml)).toFixed(2);
@@ -1158,6 +1158,29 @@ function startCrashPhase(){
   try{savePrevRound();populatePrevTab()}catch(e){}
 }
 
+// ======================== SHARED FREEFALL HELPERS ========================
+// Called every frame while pilot is ejected and flying (EXPLODE post-eject & FREEFALL)
+function _updateMultAndUI(){
+  // Sync or local multiplier
+  if(SYNC.enabled){var _sm=SYNC.getMult();if(_sm!==null)G.mult=_sm}else{G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*(CFG.multAccel||0.00036)}
+  // Clamp
+  if(!isFinite(G.mult)||G.mult>99999)G.mult=G.crashPt+1;
+  if(!isFinite(G.speed)||G.speed>10)G.speed=0.01;
+  // UI
+  setCine(G.mult.toFixed(2)+'×','FREEFALL');
+  try{$('cine').className='cine show'+(G.mult>=8?' gold':G.mult>=4?' wrn':'')}catch(e){}
+  setSt('🪂 CASH OUT — '+G.mult.toFixed(2)+'×','s3');
+  // Update bet button amounts
+  try{for(var i=0;i<2;i++){if(G.bets[i].placed&&!G.bets[i].out){$('btn'+(i+1)).querySelector('.bb-amount').textContent=(G.bets[i].amount*G.mult).toFixed(2)+' USD'}}}catch(e){}
+  // Auto cashout
+  try{for(var j=0;j<2;j++){if(G.autoCash[j]&&G.bets[j].placed&&!G.bets[j].out){var ac=parseFloat($('au'+(j+1)).value);if(ac>0&&G.mult>=ac)betAction(j+1)}}}catch(e){}
+}
+function _updateBlackHoles(){
+  if(G.mult>=(CFG.bhMinMult||2)&&Math.random()<G.dt*(CFG.bhSpawnRate||.8))spawnBlackHole();
+  try{checkBlackHoleCollision();updateBhSuck()}catch(bhErr){G.pilot._bhSuck=null;G.pilot._bhScale=1}
+  G.blackHoles=G.blackHoles.filter(function(bh){if(!bh.active){bh.hitAnim-=G.dt*2;return bh.hitAnim>0}var sy=w2s(bh.x,bh.y).y;return sy>-200&&sy<cv.height+200});
+}
+
 // ======================== PILOT PHYSICS ========================
 function updatePilotPhysics(){
   if(!G.pilot.ejected||G.pilot.chuteOpen)return;
@@ -1239,22 +1262,11 @@ function update(ts){
       }else{
         G.pilot.vy-=G.dt*25;G.pilot.y+=G.pilot.vy*G.dt;G.pilot.x+=G.pilot.vx*G.dt;G.pilot.x+=Math.sin(G.time*4)*G.dt*3;
         G.pilot.spin+=G.dt*1.2;G.pilot._bodyAngle+=(0-G.pilot._bodyAngle)*G.dt*3;
-        if(SYNC.enabled){var _sm=SYNC.getMult();if(_sm!==null)G.mult=_sm}else{G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*(CFG.multAccel||0.00036)}
-        setCine(G.mult.toFixed(2)+'×','FREEFALL');
-        try{$('cine').className='cine show'+(G.mult>=8?' gold':G.mult>=4?' wrn':'')}catch(e){}
-        setSt('🪂 CASH OUT — '+G.mult.toFixed(2)+'×','s3');
-        try{for(var i=0;i<2;i++){if(G.bets[i].placed&&!G.bets[i].out){$('btn'+(i+1)).querySelector('.bb-amount').textContent=(G.bets[i].amount*G.mult).toFixed(2)+' USD'}}}catch(e){}
-        try{for(var j=0;j<2;j++){if(G.autoCash[j]&&G.bets[j].placed&&!G.bets[j].out){var ac=parseFloat($('au'+(j+1)).value);if(ac>0&&G.mult>=ac)betAction(j+1)}}}catch(e){}
+        _updateMultAndUI();
         G.alt=Math.max(0,G.pilot.y*10);updAlt();
         G.camera.cx+=(G.pilot.x-G.camera.cx)*.1;
         G.camera.y+=(G.pilot.y-G.camera.y)*.1;
-        // Black holes after 2x — same timing as tokens
-        if(G.mult>=(CFG.bhMinMult||2)&&Math.random()<G.dt*(CFG.bhSpawnRate||.8))spawnBlackHole();
-        try{checkBlackHoleCollision();updateBhSuck()}catch(bhErr){G.pilot._bhSuck=null;G.pilot._bhScale=1}
-        G.blackHoles=G.blackHoles.filter(function(bh){if(!bh.active){bh.hitAnim-=G.dt*2;return bh.hitAnim>0}var sy=w2s(bh.x,bh.y).y;return sy>-200&&sy<cv.height+200});
-        // Safety: clamp mult/speed
-        if(!isFinite(G.mult)||G.mult>99999)G.mult=G.crashPt+1;
-        if(!isFinite(G.speed)||G.speed>10)G.speed=0.01;
+        _updateBlackHoles();
         if(G.pilot._bhSuck){}else if(G.mult>=G.crashPt){
           G.phase='CRASH';G.phaseTimer=0;
           try{startCrashPhase()}catch(e){}
@@ -1266,17 +1278,13 @@ function update(ts){
     // === FREEFALL ===
     else if(G.phase==='FREEFALL'){
       G.phaseTimer+=G.dt;
-      if(SYNC.enabled){var _sm2=SYNC.getMult();if(_sm2!==null)G.mult=_sm2}else{G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*(CFG.multAccel||0.00036)}
-      // Safety: clamp mult/speed to prevent Infinity/NaN
-      if(!isFinite(G.mult)||G.mult>99999)G.mult=G.crashPt+1;
-      if(!isFinite(G.speed)||G.speed>10)G.speed=0.01;
+      _updateMultAndUI();
       try{
       G.rocket.x+=G.rocket.vx*G.dt;G.rocket.y+=G.rocket.vy*G.dt;
       updatePilotPhysics();
       // Pilot steers toward nearest token or black hole
       var nearTk=null,nearDist=Infinity;
       G.tokens.forEach(function(tk){if(tk.collected)return;var d=Math.hypot(G.pilot.x-tk.x,G.pilot.y-tk.y);if(d<nearDist){nearDist=d;nearTk=tk}});
-      // Sometimes steer toward nearest black hole instead
       var nearBh=null,nearBhDist=Infinity;
       G.blackHoles.forEach(function(bh){if(!bh.active)return;var d=Math.hypot(G.pilot.x-bh.x,G.pilot.y-bh.y);if(d<nearBhDist){nearBhDist=d;nearBh=bh}});
       if(nearBh&&nearBhDist<(CFG.steerBhDist||350)&&(!nearTk||nearBhDist<nearDist*(CFG.steerBhPriority||0.8))){
@@ -1285,30 +1293,20 @@ function update(ts){
         G.pilot.x+=steerX;G.pilot.y+=steerY*.4;
         G.pilot.vx+=(nearBh.x>G.pilot.x?1:-1)*G.dt*20;
       } else if(nearTk&&nearDist<(CFG.steerTokenDist||500)){
-        var steerX=(nearTk.x-G.pilot.x)*G.dt*(CFG.steerTokenX||2.5);
-        var steerY=(nearTk.y-G.pilot.y)*G.dt*.8;
-        G.pilot.x+=steerX;G.pilot.y+=steerY*.3;
+        var steerX2=(nearTk.x-G.pilot.x)*G.dt*(CFG.steerTokenX||2.5);
+        var steerY2=(nearTk.y-G.pilot.y)*G.dt*.8;
+        G.pilot.x+=steerX2;G.pilot.y+=steerY2*.3;
         G.pilot.vx+=(nearTk.x>G.pilot.x?1:-1)*G.dt*15;
       }
       G.alt=Math.max(0,G.pilot.y*10);updAlt();
       G.camera.y+=(G.pilot.y-G.camera.y)*.15;G.camera.cx+=(G.pilot.x-G.camera.cx)*.15;
-      // Gradually return zoom to normal during freefall
       var ffZoom=0.95+Math.min(.05,G.phaseTimer*.02);
       G.camera.zoomTarget=ffZoom;
-      setCine(G.mult.toFixed(2)+'×','FREEFALL');
-      try{$('cine').className='cine show'+(G.mult>=8?' gold':G.mult>=4?' wrn':'')}catch(e){}
-      setSt('🪂 CASH OUT — '+G.mult.toFixed(2)+'×','s3');
-      try{for(var i=0;i<2;i++){if(G.bets[i].placed&&!G.bets[i].out){$('btn'+(i+1)).querySelector('.bb-amount').textContent=(G.bets[i].amount*G.mult).toFixed(2)+' USD'}}}catch(e){}
-      try{for(var j=0;j<2;j++){if(G.autoCash[j]&&G.bets[j].placed&&!G.bets[j].out){var ac=parseFloat($('au'+(j+1)).value);if(ac>0&&G.mult>=ac)betAction(j+1)}}}catch(e){}
       if(Math.random()<G.dt*(CFG.tokenSpawnRate||4))spawnToken();
       var _tkBoost=(CFG.tokenBoost||40)/100;
       G.tokens.forEach(function(tk){if(tk.collected)return;var dx=Math.abs(G.pilot.x-tk.x),dy=G.pilot.y-tk.y;if(dy<50&&dy>-50&&dx<80){tk.collected=true;tk.fadeOut=1;sfx.play('token');var sp=w2s(tk.x,tk.y);var _prevMult=G.mult;var _tkMul=(1+(tk.mult-1)*_tkBoost);G.mult*=_tkMul;G.crashPt*=_tkMul;var _addedX=G.mult-_prevMult;spawnParticles(sp.x,sp.y,'gold',8);showTokenPop(sp.x-30,sp.y-40,_prevMult.toFixed(2)+'× + '+_addedX.toFixed(2)+'× = '+G.mult.toFixed(2)+'×','boost')}});
       G.tokens=G.tokens.filter(function(tk){if(tk.collected){tk.fadeOut-=G.dt*3;return tk.fadeOut>0}var sy=w2s(tk.x,tk.y).y;return sy>-100&&sy<cv.height+200});
-      // Black holes
-      if(G.mult>=(CFG.bhMinMult||2)&&Math.random()<G.dt*(CFG.bhSpawnRate||.8))spawnBlackHole();
-      try{checkBlackHoleCollision();updateBhSuck()}catch(bhErr){G.pilot._bhSuck=null;G.pilot._bhScale=1}
-      // Clean up off-screen / hit black holes
-      G.blackHoles=G.blackHoles.filter(function(bh){if(!bh.active){bh.hitAnim-=G.dt*2;return bh.hitAnim>0}var sy=w2s(bh.x,bh.y).y;return sy>-200&&sy<cv.height+200});
+      _updateBlackHoles();
       if(Math.random()<G.dt*.15){showAlert(['💨 CROSSWIND','⚠ TURBULENCE','💨 WIND SHEAR'][Math.floor(Math.random()*3)]);sfx.play('wind');G.camera.shake=2}
       var mf=Math.floor(G.mult);if(mf>G.lastMultFloor&&mf>=2){sfx.play('tick');G.lastMultFloor=mf}
       if(Math.random()<.025)fakeFeed(G.mult*(.5+Math.random()*.6),true);
