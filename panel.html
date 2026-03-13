@@ -177,6 +177,12 @@ tr:hover td{background:var(--default-100)}
 .count-chip{font-size:12px;color:var(--foreground-400);font-weight:500;padding:4px 12px;background:var(--default-100);border-radius:9999px}
 .btn-sm{padding:7px 14px;font-size:12px;border-radius:var(--radius-sm)}
 
+/* ─── Time Filters ─── */
+.time-filters{display:flex;gap:0;padding:3px;border-radius:var(--radius-sm);background:var(--default-100)}
+.tf-btn{padding:5px 10px;border:none;background:transparent;color:var(--foreground-400);font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;border-radius:6px;transition:all .15s;white-space:nowrap;outline:none;letter-spacing:.3px}
+.tf-btn:hover{color:var(--foreground)}
+.tf-btn.active{color:var(--foreground);background:var(--primary);box-shadow:var(--shadow-sm)}
+
 /* ─── Scrollbar ─── */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -332,7 +338,19 @@ tr:hover td{background:var(--default-100)}
   <div class="tab-panel" id="tab-dashboard">
     <div class="sec-bar">
       <div class="sec-title">Dashboard</div>
-      <button class="btn btn-flat btn-sm" onclick="loadDashboard()">Refresh</button>
+      <div class="sec-right">
+        <div class="time-filters" id="dashFilters">
+          <button class="tf-btn" data-tf="1h" onclick="setDashFilter('1h')">1H</button>
+          <button class="tf-btn" data-tf="6h" onclick="setDashFilter('6h')">6H</button>
+          <button class="tf-btn" data-tf="12h" onclick="setDashFilter('12h')">12H</button>
+          <button class="tf-btn" data-tf="24h" onclick="setDashFilter('24h')">24H</button>
+          <button class="tf-btn" data-tf="7d" onclick="setDashFilter('7d')">1W</button>
+          <button class="tf-btn" data-tf="30d" onclick="setDashFilter('30d')">1M</button>
+          <button class="tf-btn active" data-tf="all" onclick="setDashFilter('all')">All</button>
+        </div>
+        <button class="btn btn-flat btn-sm" onclick="loadDashboard()">Refresh</button>
+        <button class="btn btn-danger btn-sm" onclick="clearRoundData()">Clear Data</button>
+      </div>
     </div>
     <div class="stat-grid" id="dashStats"></div>
     <div class="chart-card">
@@ -356,6 +374,7 @@ tr:hover td{background:var(--default-100)}
       <div class="sec-right">
         <span class="count-chip" id="roundCountLabel">0 rounds</span>
         <button class="btn btn-flat btn-sm" onclick="loadRoundHistory()">Refresh</button>
+        <button class="btn btn-danger btn-sm" onclick="clearRoundData()">Clear Data</button>
       </div>
     </div>
     <div class="table-wrap" id="roundHistWrap">
@@ -405,6 +424,30 @@ function clearAll(){if(!confirm('Erase ALL game data?'))return;var k=[];for(var 
 }
 function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2200)}
 
+function clearRoundData(){
+  if(!confirm('Clear ALL round history and live bets? This cannot be undone.'))return;
+  // Clear localStorage
+  localStorage.removeItem('skydrop_history');
+  localStorage.removeItem('skydrop_betHistory');
+  // Clear Firebase
+  if(typeof FB!=='undefined'&&FB.isOnline()){
+    var db=firebase.database();
+    Promise.all([
+      db.ref('rounds').remove(),
+      db.ref('liveBets').remove()
+    ]).then(function(){
+      toast('All round data cleared (local + cloud)');
+      loadDashboard();loadRoundHistory();
+    }).catch(function(){
+      toast('Local cleared, Firebase failed — check permissions');
+      loadDashboard();loadRoundHistory();
+    });
+  }else{
+    toast('Round data cleared (local only)');
+    loadDashboard();loadRoundHistory();
+  }
+}
+
 function switchTab(n){
   document.querySelectorAll('.tab-panel').forEach(function(t){t.classList.remove('active')});
   document.querySelectorAll('.tab-btn').forEach(function(t){t.classList.remove('active')});
@@ -414,10 +457,35 @@ function switchTab(n){
 }
 function _ls(k){try{var v=localStorage.getItem('skydrop_'+k);return v?JSON.parse(v):null}catch(e){return null}}
 
+var _dashFilter='all';
+function setDashFilter(f){
+  _dashFilter=f;
+  document.querySelectorAll('.tf-btn').forEach(function(b){b.classList.remove('active')});
+  document.querySelector('.tf-btn[data-tf="'+f+'"]').classList.add('active');
+  loadDashboard();
+}
+function _filterByTime(rounds,filter){
+  if(filter==='all')return rounds;
+  var ms={
+    '1h':3600000,'6h':21600000,'12h':43200000,
+    '24h':86400000,'7d':604800000,'30d':2592000000
+  };
+  var cutoff=Date.now()-(ms[filter]||0);
+  return rounds.filter(function(r){
+    if(r.ts)return r.ts>=cutoff;
+    if(r.time){
+      var d=new Date(r.time);
+      if(!isNaN(d.getTime()))return d.getTime()>=cutoff;
+    }
+    return true;
+  });
+}
+
 function loadDashboard(){
   if(typeof FB!=='undefined'&&FB.isOnline()){
     FB.loadRounds().then(function(fbRounds){
       var rounds=fbRounds.length?fbRounds:(_ls('history')||[]);
+      rounds=_filterByTime(rounds,_dashFilter);
       // Extract all bets from Firebase rounds
       var allBets=[];
       rounds.forEach(function(r){
@@ -431,6 +499,7 @@ function loadDashboard(){
     });
   }else{
     var h=_ls('history')||[],bh=_ls('betHistory')||[];
+    h=_filterByTime(h,_dashFilter);
     _renderDashboard(h,bh);
   }
 }

@@ -788,7 +788,7 @@ function addHist(v){try{
   var timeStr=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   var srvSeed=_rndSeed()+'VabC10zYMe2Z6DZ5rSaEqnwEd';
   var hash=_rndHex(128);
-  G.history.unshift({v:v,round:rnd,players:pCount,totalBet:tBet,result:myResult,resultColor:myResultColor,time:timeStr,serverSeed:srvSeed,hash:hash,playerNames:pNames});
+  G.history.unshift({v:v,round:rnd,players:pCount,totalBet:tBet,result:myResult,resultColor:myResultColor,time:timeStr,ts:Date.now(),serverSeed:srvSeed,hash:hash,playerNames:pNames});
   if(G.history.length>200)G.history.pop();
   _save('history',G.history);
   _save('totR',G.totR);_save('totW',G.totW);_save('totP',G.totP);_save('bestC',G.bestC);_save('hiCr',G.hiCr);_save('betHistory',G.betHistory);
