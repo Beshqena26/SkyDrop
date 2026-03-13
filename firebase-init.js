@@ -290,19 +290,34 @@ var FB = (function() {
     });
   }
 
+  // Get current game state once (for re-sync)
+  function getGameState() {
+    if (!_db) return Promise.resolve(null);
+    return _db.ref('game').once('value').then(function(snap) { return snap.val(); });
+  }
+
+  // Check if server offset is ready (non-zero means calibrated)
+  function isOffsetReady() { return _serverOffset !== 0; }
+
   // Claim leadership for the next round (atomic transaction)
+  // After claiming, writes server timestamp so all clients share the same clock reference.
   function claimNextRound(nextRound, data) {
     if (!_db) return Promise.resolve(false);
     return _db.ref('game').transaction(function(current) {
       if (!current || !current.round || current.round < nextRound) {
         data.round = nextRound;
         data.leader = _uid;
-        data.ts = Date.now() + _serverOffset; // approximate server time
+        data.ts = Date.now() + _serverOffset; // approximate — overwritten below
         return data;
       }
       // Someone else already claimed it — abort
-    }).then(function(result) { return result.committed; })
-      .catch(function() { return false; });
+    }).then(function(result) {
+      if (result.committed) {
+        // Overwrite ts with authoritative server timestamp
+        _db.ref('game/serverTs').set(firebase.database.ServerValue.TIMESTAMP);
+      }
+      return result.committed;
+    }).catch(function() { return false; });
   }
 
   // Write a player's bet for this round (visible to all)
@@ -388,7 +403,9 @@ var FB = (function() {
     writeBet: writeBet,
     onLiveBets: onLiveBets,
     offLiveBets: offLiveBets,
-    cleanOldBets: cleanOldBets
+    cleanOldBets: cleanOldBets,
+    getGameState: getGameState,
+    isOffsetReady: isOffsetReady
   };
 })();
 

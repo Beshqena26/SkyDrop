@@ -109,20 +109,48 @@ var SYNC={
 
       FB.onGameRound(function(game){
         if(!game||!game.round)return;
-        if(game.round>self.lastRound){
+        // Use serverTs (authoritative) if available, fall back to ts
+        var roundTs=game.serverTs||game.ts;
+        if(game.round>self.lastRound||
+           (game.round===self.lastRound&&game.serverTs&&!self._hasServerTs)){
           self.lastRound=game.round;
           self.roundData=game;
+          self._hasServerTs=!!game.serverTs;
           self.isLeader=(game.leader===FB.getUid());
           // flyStart = round timestamp + betting + 0.6s ejection delay
-          self.flyStartTime=game.ts+(game.betTime||BET_TIME)*1000+600;
+          self.flyStartTime=roundTs+(game.betTime||BET_TIME)*1000+600;
           self._joinRound(game);
         }
       });
 
-      // If no round exists after 2s, start the first one
+      // If no round exists after 3s, start the first one
       setTimeout(function(){
         if(self.lastRound===0)self._startNextRound(0);
-      },2000);
+      },3000);
+
+      // Re-sync when tab becomes visible again
+      document.addEventListener('visibilitychange',function(){
+        if(!document.hidden&&self.enabled){
+          self._resync();
+        }
+      });
+    });
+  },
+
+  _hasServerTs:false,
+
+  // Force re-sync with current Firebase game state
+  _resync:function(){
+    var self=this;
+    FB.getGameState().then(function(game){
+      if(!game||!game.round)return;
+      var roundTs=game.serverTs||game.ts;
+      self.lastRound=game.round;
+      self.roundData=game;
+      self._hasServerTs=!!game.serverTs;
+      self.isLeader=(game.leader===FB.getUid());
+      self.flyStartTime=roundTs+(game.betTime||BET_TIME)*1000+600;
+      self._joinRound(game);
     });
   },
 
@@ -142,7 +170,8 @@ var SYNC={
 
   _joinRound:function(game){
     var now=FB.serverNow();
-    var elapsed=(now-game.ts)/1000;
+    var roundTs=game.serverTs||game.ts;
+    var elapsed=(now-roundTs)/1000;
     var betEnd=game.betTime||BET_TIME;
     var ejectSec=betEnd+0.6;
     var explEnd=betEnd+(game.explodeTime||EXPLODE_TIME);
@@ -150,18 +179,28 @@ var SYNC={
     // Override shared values
     G.crashPt=game.crashPoint;
 
-    if(elapsed<-0.5) elapsed=0; // clock skew protection (500ms tolerance)
+    if(elapsed<-1) elapsed=0; // clock skew protection (1s tolerance)
+
+    // needSync = true if round changed OR client is in wrong phase
+    var needSync=G.roundNum!==game.round;
+    var wrongPhase=false;
+    if(!needSync){
+      // Check if client phase matches where it should be based on elapsed time
+      if(elapsed<betEnd&&G.phase!=='BETTING')wrongPhase=true;
+      else if(elapsed>=betEnd&&elapsed<explEnd&&G.phase!=='EXPLODE'&&G.phase!=='FREEFALL')wrongPhase=true;
+      else if(G.phase==='WAITING'||G.phase==='CRASH')wrongPhase=true;
+    }
 
     if(elapsed<betEnd){
       // Still in betting phase — start it
-      if(G.phase==='CRASH'||G.phase==='FREEFALL'||G.phase==='WAITING'||!G.phase||G.roundNum!==game.round){
+      if(needSync||wrongPhase){
         startBettingPhase();
         G.crashPt=game.crashPoint; // re-set after startBettingPhase generates its own
       }
       G.phaseTimer=betEnd-elapsed;
     } else if(elapsed<explEnd){
       // In explode/early freefall — jump in
-      if(G.roundNum!==game.round){
+      if(needSync||wrongPhase){
         startBettingPhase();
         G.crashPt=game.crashPoint;
         G.phaseTimer=0; // force immediate transition
@@ -173,7 +212,7 @@ var SYNC={
       var mult=computeMultFromTime(Math.max(0,flyElapsed));
       if(mult>=game.crashPoint){
         // Already crashed
-        if(G.phase!=='CRASH'&&G.roundNum!==game.round){
+        if(G.phase!=='CRASH'||needSync){
           G.roundNum=game.round;
           G.crashPt=game.crashPoint;
           G.mult=game.crashPoint;
@@ -182,7 +221,7 @@ var SYNC={
         }
       } else {
         // Still flying — join mid-flight
-        if(G.roundNum!==game.round){
+        if(needSync||wrongPhase){
           startBettingPhase();
           G.crashPt=game.crashPoint;
           startExplodePhase();
@@ -206,7 +245,10 @@ var SYNC={
   getMult:function(){
     if(!this.enabled||!this.roundData)return null;
     var now=FB.serverNow();
-    var flyElapsed=(now-this.flyStartTime)/1000;
+    var roundTs=this.roundData.serverTs||this.roundData.ts;
+    var betEnd=this.roundData.betTime||BET_TIME;
+    var flyStart=roundTs+betEnd*1000+600;
+    var flyElapsed=(now-flyStart)/1000;
     if(flyElapsed<0)return 1;
     return computeMultFromTime(flyElapsed);
   },
@@ -2400,14 +2442,10 @@ requestAnimationFrame(update);
 // Recover game when tab comes back from background
 // Browsers throttle/pause rAF for hidden tabs, so the game can get stuck
 // in WAITING phase. When user returns, force a recovery attempt.
+// Note: SYNC.init adds its own visibilitychange listener for _resync.
+// This one just resets dt to prevent a huge frame jump.
 document.addEventListener('visibilitychange',function(){
-  if(!document.hidden&&SYNC.enabled){
-    if(G.phase==='WAITING'){
-      // Force immediate re-claim instead of waiting for 5s safety
-      G.phaseTimer=0;
-      SYNC.onCrashWaitEnd();
-    }
-    // Reset delta time to avoid a huge jump from accumulated time
+  if(!document.hidden){
     G.lastFrame=performance.now();
   }
 });
