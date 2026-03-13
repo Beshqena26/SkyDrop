@@ -154,8 +154,7 @@ var SYNC={
 
     if(elapsed<betEnd){
       // Still in betting phase — start it
-      if(G.phase==='CRASH'||G.phase==='FREEFALL'||!G.phase||G.roundNum!==game.round){
-        G.roundNum=game.round-1; // startBettingPhase increments
+      if(G.phase==='CRASH'||G.phase==='FREEFALL'||G.phase==='WAITING'||!G.phase||G.roundNum!==game.round){
         startBettingPhase();
         G.crashPt=game.crashPoint; // re-set after startBettingPhase generates its own
       }
@@ -163,7 +162,6 @@ var SYNC={
     } else if(elapsed<explEnd){
       // In explode/early freefall — jump in
       if(G.roundNum!==game.round){
-        G.roundNum=game.round-1;
         startBettingPhase();
         G.crashPt=game.crashPoint;
         G.phaseTimer=0; // force immediate transition
@@ -185,7 +183,6 @@ var SYNC={
       } else {
         // Still flying — join mid-flight
         if(G.roundNum!==game.round){
-          G.roundNum=game.round-1;
           startBettingPhase();
           G.crashPt=game.crashPoint;
           startExplodePhase();
@@ -1083,11 +1080,20 @@ function showPanel2(){
 }
 
 // ======================== PHASE FUNCTIONS ========================
+var _lastBettingRound=0;
 function startBettingPhase(){
   // Line 1: set phase — NOTHING can prevent this
   G.phase='BETTING';
   G.phaseTimer=BET_TIME;
-  G.roundNum++;
+  // When SYNC is active, use Firebase round number directly to prevent double-increment
+  if(SYNC.enabled&&SYNC.lastRound>0){
+    G.roundNum=SYNC.lastRound;
+  }else{
+    G.roundNum++;
+  }
+  // Guard: prevent duplicate betting phase for same round
+  if(_lastBettingRound===G.roundNum)return;
+  _lastBettingRound=G.roundNum;
   G.mult=1;G.speed=0;G.alt=0;G.lastMultFloor=0;
 
   // Pick altitude
