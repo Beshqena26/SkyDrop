@@ -5,6 +5,7 @@
 // =====================================================================
 
 var BET_TIME=6, EXPLODE_TIME=2.2, CRASH_WAIT=3;
+function _esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 
 // ======================== ADMIN CONFIG ========================
 var CFG=(function(){
@@ -36,6 +37,14 @@ var CFG=(function(){
   if(!defaults._bhVals.length){defaults._bhVals=[5,10,15,20,30,50,100];defaults._bhWeights=[20,25,20,15,10,7,3]}
   return defaults;
 })();
+function _updateLimitsDisplay(){
+  var el;
+  el=document.getElementById('limMinBet');if(el)el.textContent='$'+(CFG.betMin||0.1);
+  el=document.getElementById('limMaxBet');if(el)el.textContent='$'+(CFG.betMax||100);
+  el=document.getElementById('limMaxWin');if(el)el.textContent='$'+(CFG.winCap||10000).toLocaleString();
+  el=document.getElementById('limBetTime');if(el)el.textContent=(CFG.betTime||6)+' seconds';
+}
+try{_updateLimitsDisplay()}catch(e){}
 
 // ======================== HOT-RELOAD CONFIG ========================
 function _applyCfgUpdate(parsed){
@@ -49,6 +58,7 @@ function _applyCfgUpdate(parsed){
   CFG._bhWeights=(CFG.bhWeights||'').split(',').map(Number).filter(function(n){return n>0});
   if(!CFG._tokenVals.length){CFG._tokenVals=[1.1,1.2,1.5,2.0,3.0,5.0,7.0,10.0];CFG._tokenWeights=[20,20,20,15,12,7,4,2]}
   if(!CFG._bhVals.length){CFG._bhVals=[5,10,15,20,30,50,100];CFG._bhWeights=[20,25,20,15,10,7,3]}
+  try{_updateLimitsDisplay()}catch(e){}
 }
 // localStorage fallback (same-origin cross-tab)
 window.addEventListener('storage',function(e){
@@ -140,7 +150,7 @@ var SYNC={
     // Override shared values
     G.crashPt=game.crashPoint;
 
-    if(elapsed<0) elapsed=0; // clock skew protection
+    if(elapsed<-0.5) elapsed=0; // clock skew protection (500ms tolerance)
 
     if(elapsed<betEnd){
       // Still in betting phase — start it
@@ -238,8 +248,8 @@ var SYNC={
           if(w){wonCount++;totalWin+=p.win||0}
           var r2=document.createElement('div');r2.className='sb-row'+(w?' won':'')+(isMe?' me':'');
           var slotLabel=p.slot>1?' #'+p.slot:'';
-          var displayName=isMe?('⭐ '+(p.name||'You')+slotLabel):((p.name||'Player')+slotLabel);
-          r2.innerHTML='<span class="sb-name"><span class="sb-av" style="background:'+(p.bg||'#333')+'">'+(p.avatar||'🧑‍✈️')+'</span>'+displayName+'</span><span class="sb-bet">'+(p.bet||0).toFixed(2)+'</span><span class="sb-x">'+(w?(p.cashMult||0).toFixed(2)+'x':'')+'</span><span class="sb-win">'+(w?(p.win||0).toFixed(2):'')+'</span>';
+          var displayName=isMe?('⭐ '+_esc(p.name||'You')+slotLabel):(_esc(p.name||'Player')+slotLabel);
+          r2.innerHTML='<span class="sb-name"><span class="sb-av" style="background:'+_esc(p.bg||'#333')+'">'+_esc(p.avatar||'🧑‍✈️')+'</span>'+displayName+'</span><span class="sb-bet">'+(p.bet||0).toFixed(2)+'</span><span class="sb-x">'+(w?(p.cashMult||0).toFixed(2)+'x':'')+'</span><span class="sb-win">'+(w?(p.win||0).toFixed(2):'')+'</span>';
           sb.insertBefore(r2,sb.firstChild);
         });
         G._sbBets=betCount;G._sbWon=wonCount;G._sbWinTotal=totalWin;
@@ -264,7 +274,9 @@ var sfx={
   init:function(){
     if(this._ready)return;
     try{
-      this.ctx=new(window.AudioContext||window.webkitAudioContext);
+      var AC=window.AudioContext||window.webkitAudioContext;
+      if(!AC){this._ready=false;return}
+      this.ctx=new AC();
       this.sfxGain=this.ctx.createGain();this.sfxGain.gain.value=this.soundOn?this.soundVol:0;this.sfxGain.connect(this.ctx.destination);
       this.bgGain=this.ctx.createGain();this.bgGain.gain.value=this.musicOn?this.musicVol:0;this.bgGain.connect(this.ctx.destination);
       // Simple reverb via delay feedback
@@ -550,7 +562,7 @@ var _selectedColor='#ff8800';
 var _selectedName='Player';
 
 function buildAvatarGrid(containerId,emojis){
-  var grid=document.getElementById(containerId);grid.innerHTML='';
+  var grid=document.getElementById(containerId);if(!grid)return;grid.innerHTML='';
   emojis.forEach(function(em){
     var btn=document.createElement('div');
     btn.textContent=em;
@@ -618,6 +630,7 @@ function fakeFeed(m,w){
   // Skip fake players when real multiplayer is active
   if(SYNC.enabled)return;
   var sb=document.getElementById('sbList');
+  if(!sb)return;
   var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);
   var bet=fakeBetAmt();
   var av=randomAvatar();
@@ -778,11 +791,10 @@ function addHist(v){try{
     pCount=Object.keys(uniq).length;
     for(var k=0;k<Math.min(3,betKeys.length);k++){pNames.push(snap[betKeys[k]].name||'Player')}
   } else {
-    // Fallback: count from sidebar
-    pCount=(G._sbBets||0)+1;
-    for(var i2=0;i2<2;i2++){var b2=G.bets[i2];if(b2.placed)tBet+=b2.amount||0}
-    try{var sbRows=document.querySelectorAll('#sbList .sb-row');sbRows.forEach(function(r){var betEl=r.querySelector('.sb-bet');if(betEl)tBet+=parseFloat(betEl.textContent)||0})}catch(e){}
-    try{var sbRows2=document.querySelectorAll('#sbList .sb-row');for(var k2=0;k2<Math.min(3,sbRows2.length);k2++){var nm=sbRows2[k2].querySelector('.sb-name');pNames.push(nm?nm.textContent.trim():'Player')}}catch(e){}
+    // Solo play: only count real player's own bets
+    pCount=1;
+    for(var i2=0;i2<2;i2++){var b2=G.bets[i2];if(b2.placed){tBet+=b2.amount||0}}
+    pNames.push('You');
   }
 
   var timeStr=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -965,7 +977,7 @@ function updateBhSuck(){
 // ======================== BET CONTROLS ========================
 var STEPS=[0.1,0.2,0.5,1,2,5,10,25,50,100];
 function adj(s,d){if(G.bets[s-1].placed)return;var b=G.bets[s-1];var i=STEPS.indexOf(b.amount);if(i===-1){i=0;for(var j=0;j<STEPS.length;j++){if(STEPS[j]>=b.amount){i=j;break}}}i=Math.max(0,Math.min(STEPS.length-1,i+d));b.amount=STEPS[i];$('a'+s).textContent=b.amount.toFixed(2);updPanelBtn(s)}
-function sa(s,v){if(G.bets[s-1].placed)return;v=Math.max(0.1,Math.min(100,v));G.bets[s-1].amount=v;$('a'+s).textContent=v.toFixed(2);updPanelBtn(s)}
+function sa(s,v){if(G.bets[s-1].placed)return;v=parseFloat(v);if(isNaN(v))v=0.1;v=Math.max(0.1,Math.min(100,v));G.bets[s-1].amount=v;$('a'+s).textContent=v.toFixed(2);updPanelBtn(s)}
 
 function updPanelBtn(s){
   try{
@@ -2086,10 +2098,14 @@ function _renderChat(containerId){
   el.innerHTML='';
   _chatHistory.forEach(function(m){
     var div=document.createElement('div');div.className='chat-msg';
-    div.innerHTML='<div class="chat-av" style="background:'+m.bg+'">'+m.avatar+'</div>'+
-      '<div class="chat-body"><div class="chat-name'+(m.isMe?' me':'')+'">'+m.name+'</div>'+
-      '<div class="chat-text">'+(m.text.indexOf('__GIF__')===0?(m.text.slice(7).indexOf('http')===0?'<div class="chat-gif-msg"><img src="'+m.text.slice(7)+'" alt="GIF" loading="lazy"></div>':'<div class="chat-gif-msg">'+m.text.slice(7)+'</div>'):m.text.replace(/</g,'&lt;').replace(/>/g,'&gt;'))+'</div>'+
-      '<div class="chat-time">'+m.time+'</div></div>';
+    var safeName=_esc(m.name);var safeAv=_esc(m.avatar);var safeBg=_esc(m.bg);
+    var safeText;
+    if(m.text.indexOf('__GIF__')===0){var gifUrl=m.text.slice(7);safeText=gifUrl.indexOf('http')===0?'<div class="chat-gif-msg"><img src="'+_esc(gifUrl)+'" alt="GIF" loading="lazy"></div>':'<div class="chat-gif-msg">'+_esc(gifUrl)+'</div>'}
+    else{safeText=_esc(m.text)}
+    div.innerHTML='<div class="chat-av" style="background:'+safeBg+'">'+safeAv+'</div>'+
+      '<div class="chat-body"><div class="chat-name'+(m.isMe?' me':'')+'">'+safeName+'</div>'+
+      '<div class="chat-text">'+safeText+'</div>'+
+      '<div class="chat-time">'+_esc(m.time)+'</div></div>';
     el.appendChild(div);
   });
   if(wasBottom)el.scrollTop=el.scrollHeight;
@@ -2319,6 +2335,7 @@ document.addEventListener('keydown',function(e){
 document.getElementById('mobileChatOverlay').addEventListener('click',function(e){if(e.target===this)toggleMobileChat()});
 // Fake chat messages from bots
 var _chatBotInterval=setInterval(function(){
+  if(SYNC.enabled){clearInterval(_chatBotInterval);return}
   if(Math.random()>.4)return;
   var av=randomAvatar();
   var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);

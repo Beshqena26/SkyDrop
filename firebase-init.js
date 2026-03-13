@@ -96,14 +96,18 @@ var FB = (function() {
       _auth.signInAnonymously().then(function(result) {
         _uid = result.user.uid;
 
-        // Track server time offset
+        // Track server time offset and connection state
         _db.ref('.info/serverTimeOffset').on('value', function(snap) {
           _serverOffset = snap.val() || 0;
         });
+        _trackConnection();
 
         // Check admin status
         _db.ref('admins/' + _uid).once('value').then(function(snap) {
           _isAdmin = !!snap.val();
+        }).catch(function() {
+          _isAdmin = false;
+        }).then(function() {
           _ready = true;
           _onReadyCbs.forEach(function(cb) { try { cb(true); } catch(e) {} });
           _onReadyCbs = [];
@@ -125,15 +129,24 @@ var FB = (function() {
     else { _onReadyCbs.push(cb); }
   }
 
-  function isOnline() { return !!_db; }
+  var _connected = false;
+  function _trackConnection() {
+    if (!_db) return;
+    _db.ref('.info/connected').on('value', function(snap) {
+      _connected = !!snap.val();
+    });
+  }
+  function isOnline() { return !!_db && _connected; }
   function isAdmin() { return _isAdmin; }
   function getUid() { return _uid; }
 
   // ─── CONFIG ───
   // Listen for config changes (real-time)
+  var _configListenerSet = false;
   function onConfigChange(cb) {
     _configCbs.push(cb);
-    if (!_db) return;
+    if (!_db || _configListenerSet) return;
+    _configListenerSet = true;
     _db.ref('config').on('value', function(snap) {
       var val = snap.val();
       if (val) {
@@ -217,14 +230,18 @@ var FB = (function() {
     };
     if (data.bets && data.bets.length) entry.bets = data.bets;
     _db.ref('rounds').push(entry);
-    // Keep only last 500 rounds (cleanup old data)
-    _db.ref('rounds').orderByChild('ts').limitToFirst(1).once('value', function(snap) {
-      snap.forEach(function(child) {
-        _db.ref('rounds').once('value', function(allSnap) {
-          if (allSnap.numChildren() > 500) { child.ref.remove(); }
+    // Keep only last 500 rounds — remove excess oldest entries
+    _db.ref('rounds').orderByChild('ts').once('value').then(function(snap) {
+      var count = snap.numChildren();
+      if (count > 500) {
+        var toRemove = count - 500;
+        snap.forEach(function(child) {
+          if (toRemove <= 0) return true;
+          child.ref.remove();
+          toRemove--;
         });
-      });
-    });
+      }
+    }).catch(function() {});
   }
 
   // Load all rounds (for dashboard)
@@ -284,7 +301,9 @@ var FB = (function() {
     if (!_db || !_uid) return;
     betData.uid = _uid;
     var slot = betData.slot || 1;
-    _db.ref('liveBets/' + roundNum + '/' + _uid + '_' + slot).set(betData);
+    var ref = _db.ref('liveBets/' + roundNum + '/' + _uid + '_' + slot);
+    ref.set(betData);
+    ref.onDisconnect().remove();
   }
 
   // Listen for all bets in a round
