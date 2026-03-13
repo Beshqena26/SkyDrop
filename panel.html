@@ -183,6 +183,21 @@ tr:hover td{background:var(--default-100)}
 .tf-btn:hover{color:var(--foreground)}
 .tf-btn.active{color:var(--foreground);background:var(--primary);box-shadow:var(--shadow-sm)}
 
+/* ─── Confirm Modal ─── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:100;display:none;align-items:center;justify-content:center;animation:fadeIn .15s ease}
+.modal-overlay.show{display:flex}
+.modal-box{background:var(--content);border-radius:var(--radius-lg);padding:32px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.5);border:1px solid var(--divider);animation:modalIn .2s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:16px;font-size:24px}
+.modal-icon.danger{background:var(--danger-50);color:var(--danger)}
+.modal-icon.warning{background:var(--warning-50);color:var(--warning)}
+.modal-title{font-size:18px;font-weight:700;color:var(--foreground);margin-bottom:8px}
+.modal-desc{font-size:13px;color:var(--foreground-500);line-height:1.6;margin-bottom:12px}
+.modal-warn{font-size:12px;color:var(--danger);background:var(--danger-50);padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:20px;line-height:1.5;display:none}
+.modal-warn.show{display:block}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end}
+
 /* ─── Scrollbar ─── */
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -388,6 +403,20 @@ tr:hover td{background:var(--default-100)}
 
 </div>
 
+<!-- ─── Confirm Dialog ─── -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box">
+    <div class="modal-icon" id="modalIcon"></div>
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-desc" id="modalDesc"></div>
+    <div class="modal-warn" id="modalWarn"></div>
+    <div class="modal-actions">
+      <button class="btn btn-flat" id="modalCancel" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="modalConfirm"></button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <div class="fb-status" id="fbStatus" style="position:fixed;bottom:16px;right:16px;padding:8px 14px;border-radius:9999px;font-size:11px;font-weight:600;z-index:50;display:none"></div>
 
@@ -418,34 +447,75 @@ function saveConfig(){
 }
 function resetToPreset(){var a=document.querySelector('.preset-chip.active');applyPreset(a?a.id.replace('pre','').toLowerCase():'easy')}
 function resetBalance(){localStorage.removeItem('skydrop_balance');toast('Balances reset')}
-function clearAll(){if(!confirm('Erase ALL game data?'))return;var k=[];for(var i=0;i<localStorage.length;i++){var x=localStorage.key(i);if(x&&x.startsWith('skydrop_'))k.push(x)};k.forEach(function(x){localStorage.removeItem(x)});
-  if(typeof FB!=='undefined'&&FB.isOnline()){FB.factoryReset().then(function(){toast('Factory reset done (local + cloud)')}).catch(function(){toast('Factory reset done (local only)')})}
-  else{toast('Factory reset done')}
+function clearAll(){
+  showModal({
+    icon:'danger',emoji:'\u26A0\uFE0F',
+    title:'Factory Reset',
+    desc:'This will erase ALL game data including settings, balances, round history, and Firebase data.',
+    warn:'This action is permanent and cannot be undone. All players will lose their data.',
+    btn:'Reset Everything',
+    onConfirm:function(){
+      var k=[];for(var i=0;i<localStorage.length;i++){var x=localStorage.key(i);if(x&&x.startsWith('skydrop_'))k.push(x)};k.forEach(function(x){localStorage.removeItem(x)});
+      if(typeof FB!=='undefined'&&FB.isOnline()){FB.factoryReset().then(function(){toast('Factory reset done (local + cloud)')}).catch(function(){toast('Factory reset done (local only)')})}
+      else{toast('Factory reset done')}
+    }
+  });
 }
 function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2200)}
 
+// ── Modal System ──
+function showModal(opts){
+  var m=document.getElementById('confirmModal');
+  var ic=document.getElementById('modalIcon');
+  ic.className='modal-icon '+(opts.icon||'danger');
+  ic.textContent=opts.emoji||'\u26A0\uFE0F';
+  document.getElementById('modalTitle').textContent=opts.title||'Are you sure?';
+  document.getElementById('modalDesc').textContent=opts.desc||'';
+  var w=document.getElementById('modalWarn');
+  if(opts.warn){w.textContent=opts.warn;w.classList.add('show')}else{w.classList.remove('show')}
+  var cb=document.getElementById('modalConfirm');
+  cb.textContent=opts.btn||'Confirm';
+  cb.onclick=function(){closeModal();if(opts.onConfirm)opts.onConfirm()};
+  m.classList.add('show');
+  // Close on overlay click
+  m.onclick=function(e){if(e.target===m)closeModal()};
+  // Close on Escape
+  document.addEventListener('keydown',_modalEsc);
+}
+function _modalEsc(e){if(e.key==='Escape')closeModal()}
+function closeModal(){
+  document.getElementById('confirmModal').classList.remove('show');
+  document.removeEventListener('keydown',_modalEsc);
+}
+
 function clearRoundData(){
-  if(!confirm('Clear ALL round history and live bets? This cannot be undone.'))return;
-  // Clear localStorage
-  localStorage.removeItem('skydrop_history');
-  localStorage.removeItem('skydrop_betHistory');
-  // Clear Firebase
-  if(typeof FB!=='undefined'&&FB.isOnline()){
-    var db=firebase.database();
-    Promise.all([
-      db.ref('rounds').remove(),
-      db.ref('liveBets').remove()
-    ]).then(function(){
-      toast('All round data cleared (local + cloud)');
-      loadDashboard();loadRoundHistory();
-    }).catch(function(){
-      toast('Local cleared, Firebase failed — check permissions');
-      loadDashboard();loadRoundHistory();
-    });
-  }else{
-    toast('Round data cleared (local only)');
-    loadDashboard();loadRoundHistory();
-  }
+  showModal({
+    icon:'danger',emoji:'\uD83D\uDDD1\uFE0F',
+    title:'Clear Round History',
+    desc:'This will delete all round history, bet data, and live bets from both this device and Firebase.',
+    warn:'All dashboard stats and charts will be reset to zero. This cannot be undone.',
+    btn:'Delete All Data',
+    onConfirm:function(){
+      localStorage.removeItem('skydrop_history');
+      localStorage.removeItem('skydrop_betHistory');
+      if(typeof FB!=='undefined'&&FB.isOnline()){
+        var db=firebase.database();
+        Promise.all([
+          db.ref('rounds').remove(),
+          db.ref('liveBets').remove()
+        ]).then(function(){
+          toast('All round data cleared (local + cloud)');
+          loadDashboard();loadRoundHistory();
+        }).catch(function(){
+          toast('Local cleared, Firebase failed — check permissions');
+          loadDashboard();loadRoundHistory();
+        });
+      }else{
+        toast('Round data cleared (local only)');
+        loadDashboard();loadRoundHistory();
+      }
+    }
+  });
 }
 
 function switchTab(n){
