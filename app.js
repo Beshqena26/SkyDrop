@@ -224,6 +224,9 @@ var SYNC={
   // Store latest live bets snapshot for round history
   _liveBetsSnapshot:{},
 
+  // Track if we've seen real players (more than just ourselves)
+  _hasRealPlayers:false,
+
   // Update sidebar with real player bets
   _updateLiveBets:function(bets){
     // bets = { uid_slot: {name,avatar,bet,cashMult,...}, ... }
@@ -232,6 +235,9 @@ var SYNC={
     var myUid=FB.getUid();
     var keys=Object.keys(bets);
     var betCount=keys.length;
+    // Check if there are other real players besides us
+    var otherPlayers=keys.some(function(k){var uid=(bets[k].uid||k.split('_')[0]);return uid!==myUid});
+    if(otherPlayers)this._hasRealPlayers=true;
     // Count unique players
     var uniqueUids={};
     keys.forEach(function(k){var uid=(bets[k].uid||k.split('_')[0]);uniqueUids[uid]=true});
@@ -596,7 +602,7 @@ function openAvatarModal(){
 }
 
 // ======================== CANVAS ========================
-var cv=document.getElementById('c'),cx=cv.getContext('2d');
+var cv=document.getElementById('c');if(!cv){cv=document.createElement('canvas');document.body.appendChild(cv)}var cx=cv.getContext('2d');
 function resize(){cv.width=innerWidth;cv.height=innerHeight}
 resize();addEventListener('resize',resize);
 function w2s(wx,wy){var anchor=innerWidth<900?.3:.45;return{x:cv.width*.5-(G.camera.cx-wx),y:cv.height*anchor-(wy-G.camera.y)}}
@@ -627,8 +633,8 @@ var AVATAR_BGS=['#8b2233','#6b4422','#887722','#226633','#223388','#552277','#55
 function randomAvatar(){var i=Math.floor(Math.random()*AVATARS.length);return{emoji:AVATARS[i],bg:AVATAR_BGS[i]}}
 function fakeFeed(m,w){
   try{
-  // Skip fake players when real multiplayer is active
-  if(SYNC.enabled)return;
+  // Skip fake players when real multiplayer has other players
+  if(SYNC.enabled&&SYNC._hasRealPlayers)return;
   var sb=document.getElementById('sbList');
   if(!sb)return;
   var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);
@@ -647,8 +653,8 @@ function fakeFeed(m,w){
 }
 function populateSidebar(){
   try{
-  // Skip fake players when real multiplayer is active
-  if(SYNC.enabled)return;
+  // Skip fake players when real multiplayer has other players
+  if(SYNC.enabled&&SYNC._hasRealPlayers)return;
   document.getElementById('sbList').innerHTML='';G._sbBets=0;G._sbWon=0;G._sbWinTotal=0;
   for(var i=0;i<12+Math.floor(Math.random()*12);i++){
     var av=randomAvatar();var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);
@@ -1047,6 +1053,14 @@ function switchTab(s,tab){
 
 function hidePanel2(){
   try{
+    // Disable auto-bet and auto-cashout for slot 2
+    G.autoBet[1]=false;G.autoCash[1]=false;
+    try{$('autoBet2').classList.remove('on')}catch(e2){}
+    try{$('autoCash2').classList.remove('on')}catch(e2){}
+    // Cancel any active bet on slot 2
+    if(G.bets[1].placed&&G.phase==='BETTING'){
+      G.balance+=G.bets[1].amount;G.bets[1].placed=false;updBal();updPanelBtn(2);
+    }
     $('panel2').classList.add('hidden');
     $('addPanel2').style.display='';
   }catch(e){}
@@ -2020,12 +2034,12 @@ function render(){
 
 // === EVENTS ===
 // Burger menu
-const menuOverlay=document.getElementById('menuOverlay'),menuPanel=document.getElementById('menuPanel');
-function openMenu(){menuOverlay.classList.add('open');menuPanel.classList.add('open')}
-function closeMenu(){menuOverlay.classList.remove('open');menuPanel.classList.remove('open')}
-document.getElementById('burgerBtn').onclick=openMenu;
-document.getElementById('menuClose').onclick=closeMenu;
-menuOverlay.onclick=closeMenu;
+var menuOverlay=document.getElementById('menuOverlay'),menuPanel=document.getElementById('menuPanel');
+function openMenu(){if(menuOverlay)menuOverlay.classList.add('open');if(menuPanel)menuPanel.classList.add('open')}
+function closeMenu(){if(menuOverlay)menuOverlay.classList.remove('open');if(menuPanel)menuPanel.classList.remove('open')}
+var _burgerBtn=document.getElementById('burgerBtn');if(_burgerBtn)_burgerBtn.onclick=openMenu;
+var _menuClose=document.getElementById('menuClose');if(_menuClose)_menuClose.onclick=closeMenu;
+if(menuOverlay)menuOverlay.onclick=closeMenu;
 // Sound toggle in menu
 document.getElementById('menuSound').onclick=()=>{const on=sfx.toggleSound();document.getElementById('soundToggle').classList.toggle('on',on)};
 document.getElementById('menuMusic').onclick=()=>{const on=sfx.toggleMusic();document.getElementById('musicToggle').classList.toggle('on',on)};
@@ -2335,7 +2349,7 @@ document.addEventListener('keydown',function(e){
 document.getElementById('mobileChatOverlay').addEventListener('click',function(e){if(e.target===this)toggleMobileChat()});
 // Fake chat messages from bots
 var _chatBotInterval=setInterval(function(){
-  if(SYNC.enabled){clearInterval(_chatBotInterval);return}
+  if(SYNC.enabled&&SYNC._hasRealPlayers){clearInterval(_chatBotInterval);return}
   if(Math.random()>.4)return;
   var av=randomAvatar();
   var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);

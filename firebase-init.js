@@ -183,11 +183,15 @@ var FB = (function() {
   // Send a chat message
   function sendChatMsg(msg) {
     if (!_db || !_uid) return;
+    var text = msg.text;
+    if (!text || typeof text !== 'string') return;
+    text = text.trim();
+    if (!text || text.length > 500) return;
     var data = {
-      name: msg.name || 'Player',
+      name: (msg.name || 'Player').slice(0, 30),
       avatar: msg.avatar || '🧑‍✈️',
       bg: msg.bg || 'rgba(76,175,80,.12)',
-      text: msg.text,
+      text: text,
       time: firebase.database.ServerValue.TIMESTAMP,
       uid: _uid
     };
@@ -195,8 +199,13 @@ var FB = (function() {
   }
 
   // Listen for new chat messages
+  var _chatListenerSet = false;
+  var _chatCb = null;
   function onChat(cb) {
     if (!_db) return;
+    _chatCb = cb;
+    if (_chatListenerSet) return;
+    _chatListenerSet = true;
     // Only get last 80 messages
     _db.ref('chat').orderByChild('time').limitToLast(80).on('child_added', function(snap) {
       var val = snap.val();
@@ -210,7 +219,7 @@ var FB = (function() {
         } else {
           val.timeStr = val.time || '';
         }
-        try { cb(val); } catch(e) {}
+        try { if(_chatCb) _chatCb(val); } catch(e) {}
       }
     });
   }
@@ -324,8 +333,12 @@ var FB = (function() {
   function cleanOldBets(currentRound) {
     if (!_db || currentRound <= 5) return;
     var cutoff = currentRound - 5;
-    _db.ref('liveBets').orderByKey().endAt(String(cutoff)).once('value', function(snap) {
-      snap.forEach(function(child) { child.ref.remove(); });
+    // Iterate all liveBets keys and remove those with numeric round <= cutoff
+    _db.ref('liveBets').once('value', function(snap) {
+      snap.forEach(function(child) {
+        var roundNum = parseInt(child.key, 10);
+        if (!isNaN(roundNum) && roundNum <= cutoff) child.ref.remove();
+      });
     });
   }
 
@@ -347,7 +360,9 @@ var FB = (function() {
     return Promise.all([
       _db.ref('config').remove(),
       _db.ref('chat').remove(),
-      _db.ref('rounds').remove()
+      _db.ref('rounds').remove(),
+      _db.ref('liveBets').remove(),
+      _db.ref('game').remove()
     ]);
   }
 
