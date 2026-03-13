@@ -647,7 +647,7 @@ function fakeFeed(m,w){
   G._sbBets=(G._sbBets||0)+1;G._sbWon=(G._sbWon||0)+(w?1:0);G._sbWinTotal=(G._sbWinTotal||0)+(w?parseFloat(fakeWin):0);
   document.getElementById('sbCount').textContent=G._sbWon+'/'+G._sbBets+' Bets';
   document.getElementById('sbWinTotal').textContent=G._sbWinTotal.toFixed(2);
-  if(w&&m>=3){try{addTopWin(r2.querySelector('.sb-name').innerHTML,bet,m.toFixed(2)+'x',fakeWin)}catch(e2){}}
+  if(w&&m>=3){try{addTopWin(r2.querySelector('.sb-name').textContent,bet,m.toFixed(2)+'x',fakeWin)}catch(e2){}}
   syncMobileSb();
   }catch(e){}
 }
@@ -705,7 +705,7 @@ function savePrevRound(){
   var rows=document.getElementById('sbList').children;
   for(var i=0;i<rows.length;i++){
     var cells=rows[i].querySelectorAll('span');
-    var name=cells[0]?cells[0].innerHTML:'';
+    var name=cells[0]?cells[0].textContent:'';
     var bet=cells[1]?cells[1].textContent:'';
     var x=cells[2]?cells[2].textContent:'';
     var win=cells[3]?cells[3].textContent:'';
@@ -724,7 +724,7 @@ function populatePrevTab(){
   var totalWin=0;
   _prevRoundData.forEach(function(d){
     var r=document.createElement('div');r.className='sb-row'+(d.won?' won':'');
-    r.innerHTML='<span class="sb-name">'+d.name+'</span><span class="sb-bet">'+d.bet+'</span><span class="sb-x">'+d.x+'</span><span class="sb-win">'+d.win+'</span>';
+    r.innerHTML='<span class="sb-name">'+_esc(d.name)+'</span><span class="sb-bet">'+_esc(d.bet)+'</span><span class="sb-x">'+_esc(d.x)+'</span><span class="sb-win">'+_esc(d.win)+'</span>';
     list.appendChild(r);
     if(d.won&&d.win)totalWin+=parseFloat(d.win)||0;
   });
@@ -750,7 +750,7 @@ function populateTopTab(){
   var total=0;
   _topWins.forEach(function(d){
     var r=document.createElement('div');r.className='sb-row won';
-    r.innerHTML='<span class="sb-name">'+d.name+'</span><span class="sb-bet">'+d.bet+'</span><span class="sb-x" style="color:var(--gld)">'+d.mult+'</span><span class="sb-win" style="color:var(--gld)">'+d.win+'</span>';
+    r.innerHTML='<span class="sb-name">'+_esc(d.name)+'</span><span class="sb-bet">'+_esc(d.bet)+'</span><span class="sb-x" style="color:var(--gld)">'+_esc(d.mult)+'</span><span class="sb-win" style="color:var(--gld)">'+_esc(d.win)+'</span>';
     list.appendChild(r);
     total+=parseFloat(d.win)||0;
   });
@@ -811,7 +811,7 @@ function addHist(v){try{
   _save('history',G.history);
   _save('totR',G.totR);_save('totW',G.totW);_save('totP',G.totP);_save('bestC',G.bestC);_save('hiCr',G.hiCr);_save('betHistory',G.betHistory);
   // Push round to Firebase — only leader pushes to avoid duplicates
-  if(typeof FB!=='undefined'&&FB.isOnline()&&(!SYNC.enabled||SYNC.isLeader)){
+  if(typeof FB!=='undefined'&&FB.isOnline()&&!G._seeding&&(!SYNC.enabled||SYNC.isLeader)){
     var roundBets=[];
     if(SYNC.enabled&&SYNC._liveBetsSnapshot){
       var sn=SYNC._liveBetsSnapshot;
@@ -896,7 +896,7 @@ function checkBlackHoleCollision(){
       G.pilot._bhSuck={bh:bh,phase:'suck',timer:0,startX:G.pilot.x,startY:G.pilot.y,exitAngle:Math.random()*Math.PI*2};
       bh.active=false;bh.hitAnim=1;
       G.camera.shake=4;
-      sfx.play('crash');
+      sfx.play('wind');
       return;
     }
   }
@@ -971,7 +971,9 @@ function updateBhSuck(){
       // Apply multiplier if not yet applied
       if(s.phase==='suck'||s.phase==='inside'){
         var bhM=bh.mult||20;
+        var _safeOld=G.mult;
         if(G.mult<bhM)G.mult=bhM;else G.mult+=bhM;
+        G.crashPt+=(G.mult-_safeOld);
       }
       G.pilot._bhSuck=null;
       G.pilot._bhScale=1;
@@ -1020,10 +1022,10 @@ function betAction(s){
       G.balance-=b.amount;b.placed=true;b.out=false;b.cashMult=0;G.totWg+=b.amount;updBal();sfx.play('bet');updPanelBtn(s);
       // Write bet to Firebase for other players to see
       if(SYNC.enabled){try{FB.writeBet(G.roundNum,{name:_selectedName||'Player',avatar:_selectedAvatar||'🧑‍✈️',bet:b.amount,slot:s,cashMult:0})}catch(e){}}}
-  }else if(G.phase==='FREEFALL'||(G.phase==='EXPLODE'&&G.pilot.ejected&&G.mult>1)){
+  }else if(G.phase==='FREEFALL'||(G.phase==='EXPLODE'&&G.pilot.ejected)){
     if(!b.placed||b.out)return;
     b.out=true;b.cashMult=G.mult;
-    var w=Math.min(CFG.winCap||10000,Math.max(0,b.amount*G.mult));
+    var w=Math.min(CFG.winCap||10000,Math.max(0,b.amount*G.mult));b.win=w;
     G.balance+=w;G.totP+=w-b.amount;G.totW++;
     if(G.mult>G.bestC)G.bestC=G.mult;
     G.betHistory.unshift({round:G.roundNum,bet:b.amount,mult:G.mult,win:w,time:new Date()});
@@ -1112,7 +1114,7 @@ function startBettingPhase(){
   try{populateSidebar()}catch(e){}
   try{sfx.stopFreefall();sfx.play('launch')}catch(e){}
   // Auto bet
-  for(var i=0;i<2;i++){try{if(G.autoBet[i]&&G.bets[i].amount>=0.1&&G.bets[i].amount<=100&&G.bets[i].amount<=G.balance){G.balance-=G.bets[i].amount;G.bets[i].placed=true;G.totWg+=G.bets[i].amount;updBal();updPanelBtn(i+1)}}catch(e){}}
+  for(var i=0;i<2;i++){try{if(G.autoBet[i]&&G.bets[i].amount>=(CFG.betMin||0.1)&&G.bets[i].amount<=(CFG.betMax||100)&&G.bets[i].amount<=G.balance){G.balance-=G.bets[i].amount;G.bets[i].placed=true;G.bets[i].out=false;G.bets[i].cashMult=0;G.totWg+=G.bets[i].amount;updBal();updPanelBtn(i+1)}}catch(e){}}
 }
 
 function startExplodePhase(){
@@ -1138,7 +1140,7 @@ function startCrashPhase(){
   try{sfx.stopFreefall();sfx.play('chute')}catch(e){}
   G.camera.shake=2;G.camera.zoomTarget=1.05;
   // Record losses
-  for(var i=0;i<2;i++){if(G.bets[i].placed&&!G.bets[i].out){G.totP-=G.bets[i].amount;G.betHistory.unshift({round:G.roundNum,bet:G.bets[i].amount,mult:G.crashPt,win:0,time:new Date()});if(G.betHistory.length>50)G.betHistory.pop()}}
+  for(var i=0;i<2;i++){if(G.bets[i].placed&&!G.bets[i].out){G.totP-=G.bets[i].amount;G.betHistory.unshift({round:G.roundNum,bet:G.bets[i].amount,mult:G.crashPt,win:0,time:new Date()});if(G.betHistory.length>200)G.betHistory.pop()}}
   // Fake loss feed
   for(var j=0;j<3+Math.floor(Math.random()*4);j++){(function(jj){setTimeout(function(){fakeFeed(0,false)},jj*80)})(j)}
   try{$('cineMain').textContent=G.crashPt.toFixed(2)+'×';$('cineSub').textContent='CHUTE OPENED';$('cine').className='cine show crashed dng';setSt('🪂 ROUND OVER — '+G.crashPt.toFixed(2)+'×','s4');updAllBtns()}catch(e){}
@@ -1345,6 +1347,7 @@ function update(ts){
     G.camera.zoomY+=((innerWidth<900?cv.height*.3:cv.height*.45)-G.camera.zoomY)*.2;
     G.camera.shake*=.94;
   }catch(e){console.error('Update:',e)}
+  try{render()}catch(re){}
   requestAnimationFrame(update);
 }
 
@@ -2033,7 +2036,6 @@ function render(){
   cx.globalAlpha=.015;for(let i=0;i<30;i++){cx.fillStyle=Math.random()>.5?'#fff':'#000';cx.fillRect(Math.random()*W,Math.random()*H,Math.random()*3+1,Math.random()*3+1)}cx.globalAlpha=1;
   cx.restore();
   }catch(e){console.error('Render error:',e);try{cx.restore()}catch(e2){}}
-  requestAnimationFrame(render);
 }
 
 // === EVENTS ===
@@ -2242,29 +2244,11 @@ function _populatePicker(pickerId,filter){
   if(_pickerMode==='emoji'){
     grid.classList.remove('gif-mode');
     Object.keys(EMOJI_DATA).forEach(function(cat){
-      if(filter&&cat.toLowerCase().indexOf(filter)===-1){
-        // check individual emojis... just show all if category doesn't match
-        var emojis=EMOJI_DATA[cat];
-        emojis.forEach(function(e){
-          // no text filter for emojis, show all unless filter is set
-        });
-        if(filter)return; // skip non-matching categories when filtering
-      }
-      // Category label
+      if(filter&&cat.toLowerCase().indexOf(filter)===-1)return;
       var lbl=document.createElement('div');
       lbl.style.cssText='grid-column:1/-1;font-size:9px;color:var(--dim);font-weight:700;letter-spacing:1px;padding:4px 0 2px;font-family:Oxanium,sans-serif';
       lbl.textContent=cat.toUpperCase();
       grid.appendChild(lbl);
-      EMOJI_DATA[cat].forEach(function(em){
-        var btn=document.createElement('button');btn.className='picker-item';btn.textContent=em;
-        btn.onclick=function(){_insertEmoji(pickerId,em)};
-        grid.appendChild(btn);
-      });
-    });
-    if(!filter){return}
-    // If filter active, re-populate showing all matching
-    grid.innerHTML='';
-    Object.keys(EMOJI_DATA).forEach(function(cat){
       EMOJI_DATA[cat].forEach(function(em){
         var btn=document.createElement('button');btn.className='picker-item';btn.textContent=em;
         btn.onclick=function(){_insertEmoji(pickerId,em)};
@@ -2338,7 +2322,12 @@ function _insertEmoji(pickerId,emoji){
 }
 function _sendGif(pickerId,gifData){
   document.getElementById(pickerId).classList.remove('open');
-  _addChatMsg(_selectedName,_selectedAvatar,'rgba(76,175,80,.12)','__GIF__'+gifData,true);
+  var gifText='__GIF__'+gifData;
+  if(_fbChatActive&&typeof FB!=='undefined'&&FB.isOnline()){
+    FB.sendChatMsg({name:_selectedName,avatar:_selectedAvatar,bg:'rgba(76,175,80,.12)',text:gifText});
+  }else{
+    _addChatMsg(_selectedName,_selectedAvatar,'rgba(76,175,80,.12)',gifText,true);
+  }
 }
 // Init pickers on load
 (function(){_populatePicker('chatPicker');_populatePicker('mChatPicker')})();
@@ -2386,7 +2375,7 @@ var _chatBotInterval=setInterval(function(){
       e.insertBefore(d,e.firstChild);while(e.children.length>16)e.removeChild(e.lastChild);
     });
   }else{
-    [1.45,3.22,1.00,7.88,2.11,1.67,12.55,1.00,4.33,2.89].forEach(function(v){addHist(v)});
+    G._seeding=true;[1.45,3.22,1.00,7.88,2.11,1.67,12.55,1.00,4.33,2.89].forEach(function(v){addHist(v)});G._seeding=false;
   }
 })();
 updBal();
@@ -2400,7 +2389,6 @@ if(!sessionStorage.getItem('skydrop_avatar_set')){
   setTimeout(function(){openAvatarModal()},600);
 }
 requestAnimationFrame(update);
-render();
 
 // Init audio on first user interaction
 function _initAudio(){
