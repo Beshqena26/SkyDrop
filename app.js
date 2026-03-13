@@ -792,14 +792,14 @@ function addHist(v){try{
   if(G.history.length>200)G.history.pop();
   _save('history',G.history);
   _save('totR',G.totR);_save('totW',G.totW);_save('totP',G.totP);_save('bestC',G.bestC);_save('hiCr',G.hiCr);_save('betHistory',G.betHistory);
-  // Push round to Firebase — include per-player bets for panel
-  if(typeof FB!=='undefined'&&FB.isOnline()){
+  // Push round to Firebase — only leader pushes to avoid duplicates
+  if(typeof FB!=='undefined'&&FB.isOnline()&&(!SYNC.enabled||SYNC.isLeader)){
     var roundBets=[];
     if(SYNC.enabled&&SYNC._liveBetsSnapshot){
       var sn=SYNC._liveBetsSnapshot;
-      Object.keys(sn).forEach(function(uid){
-        var p=sn[uid];
-        roundBets.push({uid:uid,name:p.name||'Player',bet:p.bet||0,cashMult:p.cashMult||0,win:p.win||0});
+      Object.keys(sn).forEach(function(key){
+        var p=sn[key];
+        roundBets.push({uid:p.uid||key.split('_')[0],name:p.name||'Player',bet:p.bet||0,cashMult:p.cashMult||0,win:p.win||0});
       });
     }
     try{FB.pushRound({v:v,round:rnd,players:pCount,totalBet:tBet,result:myResult,time:timeStr,bets:roundBets})}catch(fe){}

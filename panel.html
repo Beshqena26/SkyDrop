@@ -406,8 +406,12 @@ function _renderDashboard(h,bh){
   // All-player stats from embedded bets
   var tw=0,won=0,w=0,l=0,bestC=0,uniqueUids={},totalBets=0;
   h.forEach(function(r){
-    if(r.bets&&r.bets.length){
-      r.bets.forEach(function(b){
+    var bets=r.bets;
+    if(bets){
+      // Firebase may return array or object — normalize
+      var arr=Array.isArray(bets)?bets:Object.keys(bets).map(function(k){return bets[k]});
+      arr.forEach(function(b){
+        if(!b)return;
         totalBets++;
         tw+=b.bet||0;
         if(b.win>0){won+=b.win;w++;if((b.cashMult||0)>bestC)bestC=b.cashMult}else{l++}
@@ -447,8 +451,8 @@ function _renderDashboard(h,bh){
   document.getElementById('winRateChart').innerHTML='<div class="bar-row"><div class="bar-name">Wins</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(w/tb*100)+'%;background:#17c964"></div></div><div class="bar-count">'+w+'</div></div><div class="bar-row"><div class="bar-name">Losses</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(l/tb*100)+'%;background:#f31260"></div></div><div class="bar-count">'+l+'</div></div>';
   // House profit per round (cumulative)
   var pd=[],cm=0;h.slice(0,30).reverse().forEach(function(r){
-    var rIn=0,rOut=0;
-    if(r.bets&&r.bets.length){r.bets.forEach(function(b){rIn+=b.bet||0;rOut+=b.win||0})}
+    var rIn=0,rOut=0,bets=r.bets;
+    if(bets){var arr=Array.isArray(bets)?bets:Object.keys(bets).map(function(k){return bets[k]});arr.forEach(function(b){if(b){rIn+=b.bet||0;rOut+=b.win||0}})}
     else{rIn=r.totalBet||0}
     cm+=rIn-rOut;pd.push(cm);
   });
@@ -472,8 +476,10 @@ function _renderRoundHistory(h){
     var c=r.v>=5?'badge-success':r.v>=1.5?'badge-warning':'badge-danger';
     // Calculate real house profit from embedded bets
     var totalIn=0,totalOut=0;
-    if(r.bets&&r.bets.length){
-      r.bets.forEach(function(b){totalIn+=b.bet||0;totalOut+=b.win||0});
+    var bets=r.bets;
+    if(bets){
+      var arr=Array.isArray(bets)?bets:Object.keys(bets).map(function(k){return bets[k]});
+      arr.forEach(function(b){if(b){totalIn+=b.bet||0;totalOut+=b.win||0}});
     } else {
       totalIn=r.totalBet||0;
     }
