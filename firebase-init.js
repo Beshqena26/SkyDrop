@@ -30,6 +30,14 @@
 //       ".read": true,
 //       ".write": "auth != null"
 //     },
+//     "game": {
+//       ".read": true,
+//       ".write": "auth != null"
+//     },
+//     "liveBets": {
+//       ".read": true,
+//       ".write": "auth != null"
+//     },
 //     "admins": {
 //       ".read": "auth != null",
 //       ".write": false
@@ -62,6 +70,7 @@ var FB = (function() {
   var _onReadyCbs = [];
   var _configCbs = [];
   var _chatCbs = [];
+  var _serverOffset = 0;
 
   // Check if config is filled in
   function _isConfigured() {
@@ -88,6 +97,11 @@ var FB = (function() {
       _auth.signInAnonymously().then(function(result) {
         _uid = result.user.uid;
         console.log('[SkyDrop Firebase] Signed in:', _uid);
+
+        // Track server time offset
+        _db.ref('.info/serverTimeOffset').on('value', function(snap) {
+          _serverOffset = snap.val() || 0;
+        });
 
         // Check admin status
         _db.ref('admins/' + _uid).once('value').then(function(snap) {
@@ -240,6 +254,64 @@ var FB = (function() {
     });
   }
 
+  // ─── GAME SYNC ───
+  // Server-accurate timestamp
+  function serverNow() { return Date.now() + _serverOffset; }
+
+  // Listen for live game state (round info)
+  function onGameRound(cb) {
+    if (!_db) return;
+    _db.ref('game').on('value', function(snap) {
+      var val = snap.val();
+      if (val) { try { cb(val); } catch(e) {} }
+    });
+  }
+
+  // Claim leadership for the next round (atomic transaction)
+  function claimNextRound(nextRound, data) {
+    if (!_db) return Promise.resolve(false);
+    return _db.ref('game').transaction(function(current) {
+      if (!current || !current.round || current.round < nextRound) {
+        data.round = nextRound;
+        data.leader = _uid;
+        data.ts = Date.now() + _serverOffset; // approximate server time
+        return data;
+      }
+      // Someone else already claimed it — abort
+    }).then(function(result) { return result.committed; })
+      .catch(function() { return false; });
+  }
+
+  // Write a player's bet for this round (visible to all)
+  function writeBet(roundNum, betData) {
+    if (!_db || !_uid) return;
+    betData.uid = _uid;
+    _db.ref('liveBets/' + roundNum + '/' + _uid).set(betData);
+  }
+
+  // Listen for all bets in a round
+  function onLiveBets(roundNum, cb) {
+    if (!_db) return;
+    _db.ref('liveBets/' + roundNum).on('value', function(snap) {
+      try { cb(snap.val() || {}); } catch(e) {}
+    });
+  }
+
+  // Clean up old liveBets listener
+  function offLiveBets(roundNum) {
+    if (!_db) return;
+    _db.ref('liveBets/' + roundNum).off();
+  }
+
+  // Clean up old liveBets data (keep last 5 rounds)
+  function cleanOldBets(currentRound) {
+    if (!_db || currentRound <= 5) return;
+    var cutoff = currentRound - 5;
+    _db.ref('liveBets').orderByKey().endAt(String(cutoff)).once('value', function(snap) {
+      snap.forEach(function(child) { child.ref.remove(); });
+    });
+  }
+
   // ─── ADMIN ───
   // Make current user an admin (run once from browser console)
   // Usage: FB.makeAdmin()
@@ -277,7 +349,14 @@ var FB = (function() {
     loadRounds: loadRounds,
     onNewRound: onNewRound,
     makeAdmin: makeAdmin,
-    factoryReset: factoryReset
+    factoryReset: factoryReset,
+    serverNow: serverNow,
+    onGameRound: onGameRound,
+    claimNextRound: claimNextRound,
+    writeBet: writeBet,
+    onLiveBets: onLiveBets,
+    offLiveBets: offLiveBets,
+    cleanOldBets: cleanOldBets
   };
 })();
 

@@ -66,6 +66,181 @@ if(typeof FB!=='undefined'){
   });
 }
 
+// ======================== MULTIPLAYER SYNC ========================
+// Deterministic multiplier from elapsed time (same formula on all clients)
+function computeMultFromTime(t){
+  if(t<=0)return 1;
+  var s0=CFG.multSpeed||0.002,a=CFG.multAccel||0.00036;
+  return Math.exp(30*(s0*t+a*t*t/2));
+}
+// Inverse: find time when mult reaches target
+function timeForMult(target){
+  if(target<=1)return 0;
+  var s0=CFG.multSpeed||0.002,a=CFG.multAccel||0.00036;
+  var rhs=Math.log(target)/30;
+  var disc=s0*s0+2*a*rhs;
+  if(disc<0)return 0;
+  return(-s0+Math.sqrt(disc))/a;
+}
+
+var SYNC={
+  enabled:false,
+  isLeader:false,
+  lastRound:0,
+  roundData:null,
+  flyStartTime:0, // server ms when mult starts counting (ejection moment)
+  _betListenerRound:0,
+
+  init:function(){
+    if(typeof FB==='undefined')return;
+    var self=this;
+    FB.onReady(function(online){
+      if(!online)return;
+      self.enabled=true;
+      console.log('[SkyDrop SYNC] Multiplayer sync enabled');
+
+      FB.onGameRound(function(game){
+        if(!game||!game.round)return;
+        if(game.round>self.lastRound){
+          console.log('[SkyDrop SYNC] New round from Firebase:',game.round,'crashPt:',game.crashPoint);
+          self.lastRound=game.round;
+          self.roundData=game;
+          self.isLeader=(game.leader===FB.getUid());
+          // flyStart = round timestamp + betting + 0.6s ejection delay
+          self.flyStartTime=game.ts+(game.betTime||BET_TIME)*1000+600;
+          self._joinRound(game);
+        }
+      });
+
+      // If no round exists after 2s, start the first one
+      setTimeout(function(){
+        if(self.lastRound===0)self._startNextRound(0);
+      },2000);
+    });
+  },
+
+  _startNextRound:function(currentRound){
+    var nextRound=currentRound+1;
+    var cp=genCrash();
+    console.log('[SkyDrop SYNC] Claiming round',nextRound,'crashPt:',cp);
+    FB.claimNextRound(nextRound,{
+      crashPoint:cp,
+      betTime:BET_TIME,
+      explodeTime:EXPLODE_TIME,
+      crashWait:CRASH_WAIT,
+      multSpeed:CFG.multSpeed||0.002,
+      multAccel:CFG.multAccel||0.00036
+    });
+    FB.cleanOldBets(nextRound);
+  },
+
+  _joinRound:function(game){
+    var now=FB.serverNow();
+    var elapsed=(now-game.ts)/1000;
+    var betEnd=game.betTime||BET_TIME;
+    var ejectSec=betEnd+0.6;
+    var explEnd=betEnd+(game.explodeTime||EXPLODE_TIME);
+
+    // Override shared values
+    G.crashPt=game.crashPoint;
+
+    if(elapsed<0) elapsed=0; // clock skew protection
+
+    if(elapsed<betEnd){
+      // Still in betting phase — start it
+      if(G.phase==='CRASH'||G.phase==='FREEFALL'||!G.phase||G.roundNum!==game.round){
+        G.roundNum=game.round-1; // startBettingPhase increments
+        startBettingPhase();
+        G.crashPt=game.crashPoint; // re-set after startBettingPhase generates its own
+      }
+      G.phaseTimer=betEnd-elapsed;
+    } else if(elapsed<explEnd){
+      // In explode/early freefall — jump in
+      if(G.roundNum!==game.round){
+        G.roundNum=game.round-1;
+        startBettingPhase();
+        G.crashPt=game.crashPoint;
+        G.phaseTimer=0; // force immediate transition
+        startExplodePhase();
+      }
+    } else {
+      // Flying or crashed
+      var flyElapsed=elapsed-ejectSec;
+      var mult=computeMultFromTime(Math.max(0,flyElapsed));
+      if(mult>=game.crashPoint){
+        // Already crashed
+        if(G.phase!=='CRASH'&&G.roundNum!==game.round){
+          G.roundNum=game.round;
+          G.crashPt=game.crashPoint;
+          G.mult=game.crashPoint;
+          G.phase='CRASH';G.phaseTimer=0;
+          startCrashPhase();
+        }
+      } else {
+        // Still flying — join mid-flight
+        if(G.roundNum!==game.round){
+          G.roundNum=game.round-1;
+          startBettingPhase();
+          G.crashPt=game.crashPoint;
+          startExplodePhase();
+          startFreefallPhase();
+        }
+        G.mult=mult;
+      }
+    }
+
+    // Set up live bets listener for this round
+    if(this._betListenerRound!==game.round){
+      if(this._betListenerRound>0)FB.offLiveBets(this._betListenerRound);
+      this._betListenerRound=game.round;
+      FB.onLiveBets(game.round,function(bets){
+        try{SYNC._updateLiveBets(bets)}catch(e){}
+      });
+    }
+  },
+
+  // Get current synced multiplier
+  getMult:function(){
+    if(!this.enabled||!this.roundData)return null;
+    var now=FB.serverNow();
+    var flyElapsed=(now-this.flyStartTime)/1000;
+    if(flyElapsed<0)return 1;
+    return computeMultFromTime(flyElapsed);
+  },
+
+  // Called when CRASH wait ends — claim next round
+  onCrashWaitEnd:function(){
+    if(!this.enabled)return false;
+    this._startNextRound(this.lastRound);
+    return true;
+  },
+
+  // Update sidebar with real player bets
+  _updateLiveBets:function(bets){
+    // bets = { uid1: {name,avatar,bet,cashMult,...}, uid2: ... }
+    if(!bets)return;
+    var myUid=FB.getUid();
+    var keys=Object.keys(bets);
+    // Inject real players into the fake player sidebar
+    // For now, just update the player count display
+    var realCount=keys.length;
+    try{
+      var countEl=document.getElementById('sbCount');
+      var mCountEl=document.getElementById('msbCount');
+      if(countEl){
+        var txt=countEl.textContent;
+        var parts=txt.split('/');
+        if(parts.length===2)countEl.textContent=realCount+'/'+parts[1].trim();
+      }
+      if(mCountEl){
+        var txt2=mCountEl.textContent;
+        var parts2=txt2.split('/');
+        if(parts2.length===2)mCountEl.textContent=realCount+'/'+parts2[1].trim();
+      }
+    }catch(e){}
+  }
+};
+
 // ======================== SFX ENGINE ========================
 var sfx={
   ctx:null,soundOn:true,musicOn:true,soundVol:.7,musicVol:.4,
@@ -775,7 +950,9 @@ function betAction(s){
     else{
       if(b.amount>G.balance){showAlert('💰 Insufficient balance');return}
       if(b.amount<(CFG.betMin||0.1)||b.amount>(CFG.betMax||100)||!isFinite(b.amount))return;
-      G.balance-=b.amount;b.placed=true;b.out=false;b.cashMult=0;G.totWg+=b.amount;updBal();sfx.play('bet');updPanelBtn(s)}
+      G.balance-=b.amount;b.placed=true;b.out=false;b.cashMult=0;G.totWg+=b.amount;updBal();sfx.play('bet');updPanelBtn(s);
+      // Write bet to Firebase for other players to see
+      if(SYNC.enabled){try{FB.writeBet(G.roundNum,{name:_selectedName||'Player',avatar:_selectedAvatar||'🧑‍✈️',bet:b.amount,slot:s,cashMult:0})}catch(e){}}}
   }else if(G.phase==='FREEFALL'||(G.phase==='EXPLODE'&&G.pilot.ejected&&G.mult>1)){
     if(!b.placed||b.out)return;
     b.out=true;b.cashMult=G.mult;
@@ -788,6 +965,8 @@ function betAction(s){
     try{$('winAmt').textContent='+$'+w.toFixed(2)}catch(e){}
     spawnParticles(cv.width/2,cv.height/2,'gold',30);
     updPanelBtn(s);fakeFeed(G.mult,true);
+    // Update bet in Firebase with cashout
+    if(SYNC.enabled){try{FB.writeBet(G.roundNum,{name:_selectedName||'Player',avatar:_selectedAvatar||'🧑‍✈️',bet:b.amount,slot:s,cashMult:G.mult,win:w})}catch(e){}}
   }
   }catch(e){}
 }
@@ -977,7 +1156,7 @@ function update(ts){
       }else{
         G.pilot.vy-=G.dt*25;G.pilot.y+=G.pilot.vy*G.dt;G.pilot.x+=G.pilot.vx*G.dt;G.pilot.x+=Math.sin(G.time*4)*G.dt*3;
         G.pilot.spin+=G.dt*1.2;G.pilot._bodyAngle+=(0-G.pilot._bodyAngle)*G.dt*3;
-        G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*(CFG.multAccel||0.00036);
+        if(SYNC.enabled){var _sm=SYNC.getMult();if(_sm!==null)G.mult=_sm}else{G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*(CFG.multAccel||0.00036)}
         setCine(G.mult.toFixed(2)+'×','FREEFALL');
         try{$('cine').className='cine show'+(G.mult>=8?' gold':G.mult>=4?' wrn':'')}catch(e){}
         setSt('🪂 CASH OUT — '+G.mult.toFixed(2)+'×','s3');
@@ -1004,7 +1183,7 @@ function update(ts){
     // === FREEFALL ===
     else if(G.phase==='FREEFALL'){
       G.phaseTimer+=G.dt;
-      G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*(CFG.multAccel||0.00036);
+      if(SYNC.enabled){var _sm2=SYNC.getMult();if(_sm2!==null)G.mult=_sm2}else{G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*(CFG.multAccel||0.00036)}
       // Safety: clamp mult/speed to prevent Infinity/NaN
       if(!isFinite(G.mult)||G.mult>99999)G.mult=G.crashPt+1;
       if(!isFinite(G.speed)||G.speed>10)G.speed=0.01;
@@ -1071,10 +1250,24 @@ function update(ts){
       if(G.phaseTimer>1.5)setSt('NEXT ROUND IN '+rem+'s','s5');
       if(G.phaseTimer>=CRASH_WAIT){
         console.log('[SKYDROP] CRASH->BETTING transition NOW');
-        G.phase='BETTING';G.phaseTimer=BET_TIME;
-        try{startBettingPhase()}catch(e){console.log('[SKYDROP] NEW ROUND ERROR:',e.message)}
-        console.log('[SKYDROP] After transition, phase:', G.phase);
+        if(SYNC.enabled){
+          // Let SYNC handle next round via Firebase
+          SYNC.onCrashWaitEnd();
+          G.phase='WAITING';G.phaseTimer=0; // wait for Firebase to start next round
+        }else{
+          G.phase='BETTING';G.phaseTimer=BET_TIME;
+          try{startBettingPhase()}catch(e){console.log('[SKYDROP] NEW ROUND ERROR:',e.message)}
+          console.log('[SKYDROP] After transition, phase:', G.phase);
+        }
       }
+    }
+
+    // === WAITING (synced — waiting for Firebase to start next round) ===
+    else if(G.phase==='WAITING'){
+      G.phaseTimer+=G.dt;
+      setSt('SYNCING NEXT ROUND...','s5');
+      // Safety: if stuck waiting >5s, try claiming again
+      if(G.phaseTimer>5){G.phaseTimer=0;SYNC.onCrashWaitEnd()}
     }
 
     // Zoom
@@ -2124,6 +2317,8 @@ var _chatBotInterval=setInterval(function(){
 })();
 updBal();
 startBettingPhase();
+// Init multiplayer sync — will take over round management once Firebase connects
+SYNC.init();
 populateTopTab();
 if(_prevRoundData.length>0)populatePrevTab();
 // Show avatar picker on first visit
