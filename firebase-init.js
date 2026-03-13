@@ -211,7 +211,7 @@ var FB = (function() {
   // Push a round result
   function pushRound(data) {
     if (!_db) return;
-    _db.ref('rounds').push({
+    var entry = {
       v: data.v,
       round: data.round,
       players: data.players,
@@ -219,7 +219,9 @@ var FB = (function() {
       result: data.result,
       time: data.time,
       ts: firebase.database.ServerValue.TIMESTAMP
-    });
+    };
+    if (data.bets && data.bets.length) entry.bets = data.bets;
+    _db.ref('rounds').push(entry);
     // Keep only last 500 rounds (cleanup old data)
     _db.ref('rounds').orderByChild('ts').limitToFirst(1).once('value', function(snap) {
       snap.forEach(function(child) {

@@ -215,28 +215,43 @@ var SYNC={
     return true;
   },
 
+  // Store latest live bets snapshot for round history
+  _liveBetsSnapshot:{},
+
   // Update sidebar with real player bets
   _updateLiveBets:function(bets){
     // bets = { uid1: {name,avatar,bet,cashMult,...}, uid2: ... }
     if(!bets)return;
+    this._liveBetsSnapshot=bets;
     var myUid=FB.getUid();
     var keys=Object.keys(bets);
-    // Inject real players into the fake player sidebar
-    // For now, just update the player count display
     var realCount=keys.length;
     try{
-      var countEl=document.getElementById('sbCount');
+      // Replace sidebar with real players
+      var sb=document.getElementById('sbList');
+      if(sb){
+        sb.innerHTML='';
+        var wonCount=0,totalWin=0;
+        keys.forEach(function(uid){
+          var p=bets[uid];
+          var isMe=(uid===myUid);
+          var w=p.cashMult>0&&p.win>0;
+          if(w){wonCount++;totalWin+=p.win||0}
+          var r2=document.createElement('div');r2.className='sb-row'+(w?' won':'')+(isMe?' me':'');
+          var displayName=isMe?('⭐ '+(p.name||'You')):(p.name||'Player');
+          r2.innerHTML='<span class="sb-name"><span class="sb-av" style="background:'+(p.bg||'#333')+'">'+(p.avatar||'🧑‍✈️')+'</span>'+displayName+'</span><span class="sb-bet">'+(p.bet||0).toFixed(2)+'</span><span class="sb-x">'+(w?(p.cashMult||0).toFixed(2)+'x':'')+'</span><span class="sb-win">'+(w?(p.win||0).toFixed(2):'')+'</span>';
+          sb.insertBefore(r2,sb.firstChild);
+        });
+        G._sbBets=realCount;G._sbWon=wonCount;G._sbWinTotal=totalWin;
+        var countEl=document.getElementById('sbCount');
+        if(countEl)countEl.textContent=wonCount+'/'+realCount+' Bets';
+        var winEl=document.getElementById('sbWinTotal');
+        if(winEl)winEl.textContent=totalWin.toFixed(2);
+      }
+      // Mobile sidebar
       var mCountEl=document.getElementById('msbCount');
-      if(countEl){
-        var txt=countEl.textContent;
-        var parts=txt.split('/');
-        if(parts.length===2)countEl.textContent=realCount+'/'+parts[1].trim();
-      }
-      if(mCountEl){
-        var txt2=mCountEl.textContent;
-        var parts2=txt2.split('/');
-        if(parts2.length===2)mCountEl.textContent=realCount+'/'+parts2[1].trim();
-      }
+      if(mCountEl)mCountEl.textContent=realCount+' Players';
+      syncMobileSb();
     }catch(e){}
   }
 };
@@ -601,6 +616,8 @@ var AVATAR_BGS=['#8b2233','#6b4422','#887722','#226633','#223388','#552277','#55
 function randomAvatar(){var i=Math.floor(Math.random()*AVATARS.length);return{emoji:AVATARS[i],bg:AVATAR_BGS[i]}}
 function fakeFeed(m,w){
   try{
+  // Skip fake players when real multiplayer is active
+  if(SYNC.enabled)return;
   var sb=document.getElementById('sbList');
   var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);
   var bet=fakeBetAmt();
@@ -618,6 +635,8 @@ function fakeFeed(m,w){
 }
 function populateSidebar(){
   try{
+  // Skip fake players when real multiplayer is active
+  if(SYNC.enabled)return;
   document.getElementById('sbList').innerHTML='';G._sbBets=0;G._sbWon=0;G._sbWinTotal=0;
   for(var i=0;i<12+Math.floor(Math.random()*12);i++){
     var av=randomAvatar();var id=Math.floor(Math.random()*9)+'***'+Math.floor(Math.random()*9);
@@ -745,19 +764,45 @@ function hideCine(){try{$('cine').classList.remove('show')}catch(e){}}
 function showAlert(t){try{var e=$('alrt');e.textContent=t;e.className='alrt show';setTimeout(function(){e.classList.remove('show')},2000)}catch(e){}}
 function showBig(id,dur){try{var e=$(id);e.classList.add('show');setTimeout(function(){e.classList.remove('show')},dur||2500)}catch(e){}}
 function addHist(v){try{
-  var rnd=G.roundNum,pCount=G.fPlayers?G.fPlayers.length:0,tBet=0,myResult='—',myResultColor='var(--dim)';
+  var rnd=G.roundNum,pCount=0,tBet=0,myResult='—',myResultColor='var(--dim)';
+  // My own result
   for(var i=0;i<2;i++){var b=G.bets[i];if(b.placed){if(b.out&&b.win>0){myResult='+$'+b.win.toFixed(2);myResultColor='var(--acc)'}else{myResult='-$'+b.amount.toFixed(2);myResultColor='var(--dng)'}}}
-  if(G.fPlayers)for(var j=0;j<G.fPlayers.length;j++)tBet+=parseFloat(G.fPlayers[j].bet)||0;
+
+  var pNames=[];
+  // Use real liveBets data when multiplayer sync is active
+  if(SYNC.enabled&&SYNC._liveBetsSnapshot){
+    var snap=SYNC._liveBetsSnapshot;
+    var uids=Object.keys(snap);
+    pCount=uids.length;
+    uids.forEach(function(uid){tBet+=parseFloat(snap[uid].bet)||0});
+    for(var k=0;k<Math.min(3,uids.length);k++){pNames.push(snap[uids[k]].name||'Player')}
+  } else {
+    // Fallback: count from sidebar
+    pCount=(G._sbBets||0)+1;
+    for(var i2=0;i2<2;i2++){var b2=G.bets[i2];if(b2.placed)tBet+=b2.amount||0}
+    try{var sbRows=document.querySelectorAll('#sbList .sb-row');sbRows.forEach(function(r){var betEl=r.querySelector('.sb-bet');if(betEl)tBet+=parseFloat(betEl.textContent)||0})}catch(e){}
+    try{var sbRows2=document.querySelectorAll('#sbList .sb-row');for(var k2=0;k2<Math.min(3,sbRows2.length);k2++){var nm=sbRows2[k2].querySelector('.sb-name');pNames.push(nm?nm.textContent.trim():'Player')}}catch(e){}
+  }
+
   var timeStr=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   var srvSeed=_rndSeed()+'VabC10zYMe2Z6DZ5rSaEqnwEd';
   var hash=_rndHex(128);
-  var pNames=G.fPlayers?G.fPlayers.slice(0,3).map(function(p){return p.name||'Player'}):[];
   G.history.unshift({v:v,round:rnd,players:pCount,totalBet:tBet,result:myResult,resultColor:myResultColor,time:timeStr,serverSeed:srvSeed,hash:hash,playerNames:pNames});
   if(G.history.length>200)G.history.pop();
   _save('history',G.history);
   _save('totR',G.totR);_save('totW',G.totW);_save('totP',G.totP);_save('bestC',G.bestC);_save('hiCr',G.hiCr);_save('betHistory',G.betHistory);
-  // Push round to Firebase for shared dashboard
-  if(typeof FB!=='undefined'&&FB.isOnline()){try{FB.pushRound({v:v,round:rnd,players:pCount,totalBet:tBet,result:myResult,time:timeStr})}catch(fe){}}
+  // Push round to Firebase — include per-player bets for panel
+  if(typeof FB!=='undefined'&&FB.isOnline()){
+    var roundBets=[];
+    if(SYNC.enabled&&SYNC._liveBetsSnapshot){
+      var sn=SYNC._liveBetsSnapshot;
+      Object.keys(sn).forEach(function(uid){
+        var p=sn[uid];
+        roundBets.push({uid:uid,name:p.name||'Player',bet:p.bet||0,cashMult:p.cashMult||0,win:p.win||0});
+      });
+    }
+    try{FB.pushRound({v:v,round:rnd,players:pCount,totalBet:tBet,result:myResult,time:timeStr,bets:roundBets})}catch(fe){}
+  }
   var e=$('hs'),c=v>=5?'g':v>=1.5?'y':'r',d=document.createElement('div');d.className='hc '+c;d.textContent=v.toFixed(2)+'×';d.style.cursor='pointer';
   d.onclick=(function(info){return function(){showRoundInfo(info)}})(G.history[0]);
   e.insertBefore(d,e.firstChild);while(e.children.length>16)e.removeChild(e.lastChild)

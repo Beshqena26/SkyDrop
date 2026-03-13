@@ -347,7 +347,7 @@ tr:hover td{background:var(--default-100)}
     </div>
     <div class="table-wrap" id="betHistWrap">
       <div class="table-scroll">
-        <table><thead><tr><th>Round</th><th>Bet</th><th>Cashout</th><th>Win</th><th>P/L</th><th>Time</th></tr></thead>
+        <table><thead><tr><th>Round</th><th>Player</th><th>Bet</th><th>Cashout</th><th>Win</th><th>P/L</th><th>Time</th></tr></thead>
         <tbody id="betHistBody"></tbody></table>
       </div>
     </div>
@@ -401,27 +401,38 @@ function switchTab(n){
 function _ls(k){try{var v=localStorage.getItem('skydrop_'+k);return v?JSON.parse(v):null}catch(e){return null}}
 
 function loadDashboard(){
-  // Try Firebase first for round history, fall back to localStorage
   if(typeof FB!=='undefined'&&FB.isOnline()){
     FB.loadRounds().then(function(fbRounds){
-      var bh=_ls('betHistory')||[],totP=_ls('totP')||0,bestC=_ls('bestC')||0,bal=_ls('balance')||1000;
-      _renderDashboard(fbRounds.length?fbRounds:(_ls('history')||[]),bh,totP,bestC,bal);
+      var rounds=fbRounds.length?fbRounds:(_ls('history')||[]);
+      // Extract all bets from Firebase rounds
+      var allBets=[];
+      rounds.forEach(function(r){
+        if(r.bets&&r.bets.length){
+          r.bets.forEach(function(b){allBets.push({bet:b.bet||0,win:b.win||0,mult:b.cashMult||0})});
+        }
+      });
+      // If no embedded bets, fall back to localStorage
+      if(!allBets.length){var lbh=_ls('betHistory')||[];allBets=lbh}
+      _renderDashboard(rounds,allBets);
     });
   }else{
-    var h=_ls('history')||[],bh=_ls('betHistory')||[],totP=_ls('totP')||0,bestC=_ls('bestC')||0,bal=_ls('balance')||1000;
-    _renderDashboard(h,bh,totP,bestC,bal);
+    var h=_ls('history')||[],bh=_ls('betHistory')||[];
+    _renderDashboard(h,bh);
   }
 }
-function _renderDashboard(h,bh,totP,bestC,bal){
-  var tw=0,won=0,w=0,l=0;
-  bh.forEach(function(b){tw+=b.bet||0;if(b.win>0){won+=b.win;w++}else l++});
+function _renderDashboard(h,bh){
+  var tw=0,won=0,w=0,l=0,bestC=0;
+  bh.forEach(function(b){tw+=b.bet||0;if(b.win>0){won+=b.win;w++;if((b.mult||0)>bestC)bestC=b.mult}else l++});
+  var totP=won-tw;
   var avg=0;if(h.length){var s=0;h.forEach(function(r){s+=r.v||0});avg=s/h.length}
   var wr=bh.length?((w/bh.length)*100).toFixed(1):'0.0';
   var hp=tw-won;
+  // Total players across all rounds
+  var totalPlayers=0;h.forEach(function(r){totalPlayers+=r.players||0});
   document.getElementById('dashStats').innerHTML=
     '<div class="stat-card"><div class="stat-value cyan">'+h.length+'</div><div class="stat-name">Rounds</div></div>'+
     '<div class="stat-card"><div class="stat-value">'+bh.length+'</div><div class="stat-name">Total Bets</div></div>'+
-    '<div class="stat-card"><div class="stat-value gold">$'+bal.toFixed(2)+'</div><div class="stat-name">Balance</div></div>'+
+    '<div class="stat-card"><div class="stat-value gold">'+totalPlayers+'</div><div class="stat-name">Total Players</div></div>'+
     '<div class="stat-card"><div class="stat-value">$'+tw.toFixed(2)+'</div><div class="stat-name">Wagered</div></div>'+
     '<div class="stat-card"><div class="stat-value green">$'+won.toFixed(2)+'</div><div class="stat-name">Won</div></div>'+
     '<div class="stat-card"><div class="stat-value '+(totP>=0?'green':'red')+'">$'+totP.toFixed(2)+'</div><div class="stat-name">Net P/L</div></div>'+
@@ -462,13 +473,35 @@ function _renderRoundHistory(h){
 }
 
 function loadBetHistory(){
-  var bh=_ls('betHistory')||[],bd=document.getElementById('betHistBody'),wr=document.getElementById('betHistWrap'),em=document.getElementById('betEmpty');
-  document.getElementById('betCountLabel').textContent=bh.length+' bets';
-  if(!bh.length){bd.innerHTML='';wr.style.display='none';em.style.display='block';return}
+  if(typeof FB!=='undefined'&&FB.isOnline()){
+    FB.loadRounds().then(function(rounds){
+      var allBets=[];
+      rounds.forEach(function(r){
+        if(r.bets&&r.bets.length){
+          r.bets.forEach(function(b){
+            allBets.push({round:r.round,name:b.name||'Player',bet:b.bet||0,mult:b.cashMult||0,win:b.win||0,time:r.time,crashPt:r.v});
+          });
+        }
+      });
+      if(allBets.length){_renderBetHistory(allBets)}else{_renderBetHistoryLocal()}
+    });
+  }else{_renderBetHistoryLocal()}
+}
+function _renderBetHistoryLocal(){
+  var bh=_ls('betHistory')||[];
+  var mapped=bh.map(function(b){var ts='\u2014';if(b.time){try{ts=new Date(b.time).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}catch(e){}}return{round:b.round,name:'You',bet:b.bet,mult:b.mult,win:b.win||0,time:ts}});
+  _renderBetHistory(mapped);
+}
+function _renderBetHistory(bets){
+  var bd=document.getElementById('betHistBody'),wr=document.getElementById('betHistWrap'),em=document.getElementById('betEmpty');
+  document.getElementById('betCountLabel').textContent=bets.length+' bets';
+  if(!bets.length){bd.innerHTML='';wr.style.display='none';em.style.display='block';return}
   wr.style.display='block';em.style.display='none';
-  var o='';bh.forEach(function(b){var p=(b.win||0)-b.bet,pc=p>0?'pnl-pos':p<0?'pnl-neg':'pnl-zero',ps=p>=0?'+$'+p.toFixed(2):'-$'+Math.abs(p).toFixed(2),cs=b.win>0?b.mult.toFixed(2)+'x':'BUST',cc=b.win>0?'badge-success':'badge-danger',ts='\u2014';
-    if(b.time){try{ts=new Date(b.time).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}catch(e){}}
-    o+='<tr><td>#'+b.round+'</td><td>$'+b.bet.toFixed(2)+'</td><td><span class="badge '+cc+'">'+cs+'</span></td><td>$'+(b.win||0).toFixed(2)+'</td><td class="'+pc+'">'+ps+'</td><td style="color:var(--foreground-400);font-size:12px">'+ts+'</td></tr>'});
+  var o='';bets.forEach(function(b){
+    var p=(b.win||0)-(b.bet||0),pc=p>0?'pnl-pos':p<0?'pnl-neg':'pnl-zero';
+    var ps=p>=0?'+$'+p.toFixed(2):'-$'+Math.abs(p).toFixed(2);
+    var cs=b.win>0?(b.mult||0).toFixed(2)+'x':'BUST',cc=b.win>0?'badge-success':'badge-danger';
+    o+='<tr><td>#'+b.round+'</td><td>'+(b.name||'Player')+'</td><td>$'+(b.bet||0).toFixed(2)+'</td><td><span class="badge '+cc+'">'+cs+'</span></td><td>$'+(b.win||0).toFixed(2)+'</td><td class="'+pc+'">'+ps+'</td><td style="color:var(--foreground-400);font-size:12px">'+(b.time||'\u2014')+'</td></tr>'});
   bd.innerHTML=o;
 }
 
