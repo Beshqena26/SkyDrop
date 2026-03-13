@@ -2390,6 +2390,21 @@ if(!sessionStorage.getItem('skydrop_avatar_set')){
 }
 requestAnimationFrame(update);
 
+// Recover game when tab comes back from background
+// Browsers throttle/pause rAF for hidden tabs, so the game can get stuck
+// in WAITING phase. When user returns, force a recovery attempt.
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden&&SYNC.enabled){
+    if(G.phase==='WAITING'){
+      // Force immediate re-claim instead of waiting for 5s safety
+      G.phaseTimer=0;
+      SYNC.onCrashWaitEnd();
+    }
+    // Reset delta time to avoid a huge jump from accumulated time
+    G.lastFrame=performance.now();
+  }
+});
+
 // Init audio on first user interaction
 function _initAudio(){
   sfx.init();sfx.res();
