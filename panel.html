@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SkyDrop II — Admin Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#000;
+  --content:#18181b;
+  --default-100:#27272a;
+  --default-200:#3f3f46;
+  --default-300:#52525b;
+  --default-400:#71717a;
+  --default-500:#a1a1aa;
+  --foreground:#fafafa;
+  --foreground-500:#a1a1aa;
+  --foreground-400:#71717a;
+  --primary:#006FEE;
+  --primary-50:#001731;
+  --primary-100:#002e62;
+  --primary-200:#004493;
+  --success:#17c964;
+  --success-50:#052814;
+  --warning:#f5a524;
+  --warning-50:#312107;
+  --danger:#f31260;
+  --danger-50:#310413;
+  --focus:#006FEE;
+  --divider:rgba(255,255,255,.15);
+  --radius-sm:8px;
+  --radius-md:12px;
+  --radius-lg:14px;
+  --shadow-sm:0 1px 2px 0 rgba(0,0,0,.3);
+  --shadow-md:0 4px 6px -1px rgba(0,0,0,.4),0 2px 4px -2px rgba(0,0,0,.3);
+  --shadow-lg:0 10px 15px -3px rgba(0,0,0,.4),0 4px 6px -4px rgba(0,0,0,.3);
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--foreground);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+/* ─── Navbar ─── */
+.navbar{position:sticky;top:0;z-index:40;height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:rgba(0,0,0,.8);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--divider)}
+.navbar-brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px;letter-spacing:-.02em}
+.navbar-brand span{color:var(--foreground-400);font-size:13px;font-weight:500;padding-left:12px;border-left:1px solid var(--default-200)}
+.nav-link{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-md);font-size:13px;font-weight:500;color:var(--foreground-500);text-decoration:none;transition:all .2s}
+.nav-link:hover{color:var(--foreground);background:var(--default-100)}
+.nav-link svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ─── Container ─── */
+.container{max-width:1024px;margin:0 auto;padding:32px 24px 64px}
+@media(max-width:640px){.container{padding:20px 16px 40px}}
+
+/* ─── Tabs (solid variant) ─── */
+.tabs-list{display:flex;gap:0;padding:4px;border-radius:var(--radius-md);background:var(--default-100);margin-bottom:32px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab-btn{position:relative;padding:8px 20px;border:none;background:transparent;color:var(--foreground-400);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;border-radius:var(--radius-sm);transition:all .2s;white-space:nowrap;outline:none}
+.tab-btn:hover{color:var(--foreground)}
+.tab-btn.active{color:var(--foreground);background:var(--content);box-shadow:var(--shadow-sm)}
+.tab-panel{display:none;animation:tabIn .2s ease}.tab-panel.active{display:block}
+@keyframes tabIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+/* ─── Card ─── */
+.card{background:var(--content);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);overflow:hidden}
+.card-header{padding:16px 20px;font-size:13px;font-weight:600;color:var(--foreground);display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--divider)}
+.card-body{padding:16px 20px;display:flex;flex-direction:column;gap:12px}
+.card-footer{padding:12px 20px;border-top:1px solid var(--divider)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-full{grid-column:1/-1}
+@media(max-width:640px){.grid-2{grid-template-columns:1fr}}
+
+/* ─── Preset Chips ─── */
+.preset-row{display:flex;gap:10px;margin-bottom:28px;flex-wrap:wrap}
+.preset-chip{flex:1;min-width:160px;padding:14px 20px;border-radius:var(--radius-lg);border:2px solid transparent;background:var(--content);cursor:pointer;transition:all .2s;text-align:center;outline:none;box-shadow:var(--shadow-sm)}
+.preset-chip:hover{background:var(--default-100)}
+.preset-chip.active{border-color:var(--primary);background:var(--primary-50)}
+.preset-chip .preset-name{font-weight:700;font-size:14px;color:var(--foreground);margin-bottom:2px}
+.preset-chip .preset-desc{font-size:11px;color:var(--foreground-400);font-weight:400}
+.chip{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:600;letter-spacing:.5px}
+.chip-success{background:var(--success-50);color:var(--success)}
+.chip-warning{background:var(--warning-50);color:var(--warning)}
+.chip-danger{background:var(--danger-50);color:var(--danger)}
+
+/* ─── Form Rows ─── */
+.field{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px}
+.field-label{font-size:13px;color:var(--foreground-500);font-weight:500;flex-shrink:0}
+.field-hint{font-size:11px;color:var(--foreground-400);line-height:1.5;padding:4px 0}
+.input{width:120px;padding:8px 12px;background:var(--default-100);border:2px solid transparent;border-radius:var(--radius-sm);color:var(--foreground);font-family:'Inter',sans-serif;font-size:13px;outline:none;text-align:right;transition:all .2s}
+.input:hover{background:var(--default-200)}
+.input:focus{border-color:var(--focus);background:var(--default-100)}
+.input-wide{width:100%;text-align:left}
+.select{width:auto;min-width:140px;padding:8px 32px 8px 12px;background:var(--default-100);border:2px solid transparent;border-radius:var(--radius-sm);color:var(--foreground);font-family:'Inter',sans-serif;font-size:13px;outline:none;cursor:pointer;transition:all .2s;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.select:hover{background:var(--default-200)}
+.select:focus{border-color:var(--focus);background:var(--default-100)}
+.divider{height:1px;background:var(--divider);margin:4px 0}
+
+/* ─── Buttons ─── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 24px;border:none;border-radius:var(--radius-md);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;outline:none;white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow-sm)}
+.btn-primary:hover{opacity:.9;box-shadow:var(--shadow-md)}
+.btn-flat{background:var(--default-100);color:var(--foreground-500)}
+.btn-flat:hover{background:var(--default-200);color:var(--foreground)}
+.btn-danger{background:var(--danger-50);color:var(--danger)}
+.btn-danger:hover{opacity:.8}
+.actions-bar{display:flex;gap:8px;margin-top:24px;flex-wrap:wrap}
+
+/* ─── Toast (snackbar) ─── */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);padding:12px 24px;border-radius:var(--radius-md);background:var(--content);color:var(--foreground);font-size:13px;font-weight:500;box-shadow:var(--shadow-lg);border:1px solid var(--divider);opacity:0;transition:all .35s cubic-bezier(.4,0,.2,1);z-index:50;max-width:400px;text-align:center}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
+/* ─── Dashboard Stats ─── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{background:var(--content);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column;gap:4px}
+.stat-value{font-size:24px;font-weight:700;letter-spacing:-.03em;color:var(--foreground)}
+.stat-value.green{color:var(--success)}.stat-value.red{color:var(--danger)}.stat-value.gold{color:var(--warning)}.stat-value.cyan{color:var(--primary)}
+.stat-name{font-size:11px;font-weight:500;color:var(--foreground-400);text-transform:uppercase;letter-spacing:.5px}
+
+/* ─── Charts ─── */
+.chart-card{background:var(--content);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);margin-bottom:16px}
+.chart-label{font-size:12px;font-weight:600;color:var(--foreground);margin-bottom:16px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.bar-name{font-size:11px;color:var(--foreground-400);width:75px;text-align:right;flex-shrink:0;font-weight:500}
+.bar-track{flex:1;height:8px;background:var(--default-100);border-radius:9999px;overflow:hidden}
+.bar-fill{height:100%;border-radius:9999px;transition:width .5s ease}
+.bar-count{font-size:12px;color:var(--foreground-500);width:36px;flex-shrink:0;font-weight:600;font-variant-numeric:tabular-nums}
+.dot-chart{display:flex;align-items:flex-end;gap:2px;height:100px;padding:8px 0;overflow-x:auto}
+.dot-bar{width:5px;border-radius:3px 3px 0 0;min-height:3px;flex-shrink:0;transition:opacity .15s;cursor:default}
+.dot-bar:hover{opacity:.6}
+
+/* ─── Table ─── */
+.table-wrap{background:var(--content);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden}
+.table-scroll{max-height:480px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--default-200) transparent}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;font-weight:600;color:var(--foreground-400);text-align:left;padding:12px 16px;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;background:var(--content);z-index:1}
+td{padding:10px 16px;font-size:13px;color:var(--foreground);border-top:1px solid var(--divider)}
+tr:hover td{background:var(--default-100)}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:600}
+.badge-success{background:var(--success-50);color:var(--success)}
+.badge-warning{background:var(--warning-50);color:var(--warning)}
+.badge-danger{background:var(--danger-50);color:var(--danger)}
+.pnl-pos{color:var(--success);font-weight:600}
+.pnl-neg{color:var(--danger);font-weight:600}
+.pnl-zero{color:var(--foreground-400)}
+.empty-msg{text-align:center;padding:48px 20px;color:var(--foreground-400);font-size:14px}
+
+/* ─── Section Header ─── */
+.sec-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
+.sec-title{font-size:18px;font-weight:700;color:var(--foreground);letter-spacing:-.02em}
+.sec-right{display:flex;align-items:center;gap:10px}
+.count-chip{font-size:12px;color:var(--foreground-400);font-weight:500;padding:4px 12px;background:var(--default-100);border-radius:9999px}
+.btn-sm{padding:7px 14px;font-size:12px;border-radius:var(--radius-sm)}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--default-200);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- ─── Navbar ─── -->
+<nav class="navbar">
+  <div class="navbar-brand">SkyDrop II <span>Admin Panel</span></div>
+  <a href="index.html" class="nav-link">
+    <svg viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    Back to Game
+  </a>
+</nav>
+
+<div class="container">
+  <!-- ─── Tabs ─── -->
+  <div class="tabs-list">
+    <button class="tab-btn active" data-tab="settings" onclick="switchTab('settings')">Settings</button>
+    <button class="tab-btn" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab-btn" data-tab="rounds" onclick="switchTab('rounds')">Round History</button>
+    <button class="tab-btn" data-tab="bets" onclick="switchTab('bets')">Bet History</button>
+  </div>
+
+  <!-- ═══════ SETTINGS ═══════ -->
+  <div class="tab-panel active" id="tab-settings">
+
+    <div class="preset-row">
+      <button class="preset-chip active" onclick="applyPreset('easy')" id="preEasy">
+        <div class="preset-name">Easy <span class="chip chip-success">Presentation</span></div>
+        <div class="preset-desc">High crash points, easy wins</div>
+      </button>
+      <button class="preset-chip" onclick="applyPreset('normal')" id="preNormal">
+        <div class="preset-name">Normal <span class="chip chip-warning">Balanced</span></div>
+        <div class="preset-desc">Fair gameplay, moderate risk</div>
+      </button>
+      <button class="preset-chip" onclick="applyPreset('usual')" id="preUsual">
+        <div class="preset-name">Usual <span class="chip chip-danger">Original</span></div>
+        <div class="preset-desc">Classic house-edge distribution</div>
+      </button>
+    </div>
+
+    <div class="grid-2">
+      <!-- Crash Point -->
+      <div class="card">
+        <div class="card-header">Crash Point Generator</div>
+        <div class="card-body">
+          <div class="field"><span class="field-label">Mode</span>
+            <select class="select" id="crashMode">
+              <option value="easy">Easy (8-78x)</option>
+              <option value="normal">Normal (1.2-30x)</option>
+              <option value="usual">Usual (house edge)</option>
+            </select>
+          </div>
+          <div class="field"><span class="field-label">Min crash point</span><input class="input" id="crashMin" type="number" step="0.1" value="8"></div>
+          <div class="field"><span class="field-label">Max base range</span><input class="input" id="crashRange" type="number" step="1" value="20"></div>
+          <div class="field"><span class="field-label">Bonus chance (%)</span><input class="input" id="crashBonusChance" type="number" step="1" value="40"></div>
+          <div class="field"><span class="field-label">Max bonus</span><input class="input" id="crashBonusMax" type="number" step="1" value="50"></div>
+          <div class="field-hint">Easy: min + rand(range), bonus%. Usual: 1/(1-rand) house edge.</div>
+        </div>
+      </div>
+
+      <!-- Timers -->
+      <div class="card">
+        <div class="card-header">Round Timers</div>
+        <div class="card-body">
+          <div class="field"><span class="field-label">Bet time (s)</span><input class="input" id="betTime" type="number" step="0.5" value="6"></div>
+          <div class="field"><span class="field-label">Explode time (s)</span><input class="input" id="explodeTime" type="number" step="0.1" value="2.2"></div>
+          <div class="field"><span class="field-label">Crash wait (s)</span><input class="input" id="crashWait" type="number" step="0.5" value="3"></div>
+          <div class="divider"></div>
+          <div class="field"><span class="field-label">Mult speed base</span><input class="input" id="multSpeed" type="number" step="0.001" value="0.002"></div>
+          <div class="field"><span class="field-label">Mult speed accel</span><input class="input" id="multAccel" type="number" step="0.0001" value="0.00036"></div>
+          <div class="field-hint">How fast the multiplier accelerates per frame.</div>
+        </div>
+      </div>
+
+      <!-- Tokens -->
+      <div class="card">
+        <div class="card-header">Tokens</div>
+        <div class="card-body">
+          <div class="field"><span class="field-label">Max on screen</span><input class="input" id="tokenMax" type="number" step="1" value="25"></div>
+          <div class="field"><span class="field-label">Spawn rate</span><input class="input" id="tokenSpawnRate" type="number" step="0.5" value="4"></div>
+          <div class="field"><span class="field-label">Collection boost %</span><input class="input" id="tokenBoost" type="number" step="5" value="40"></div>
+          <div class="divider"></div>
+          <div class="field"><span class="field-label">Values</span><input class="input input-wide" id="tokenVals" value="1.1,1.2,1.5,2.0,3.0,5.0,7.0,10.0"></div>
+          <div class="field"><span class="field-label">Weights</span><input class="input input-wide" id="tokenWeights" value="20,20,20,15,12,7,4,2"></div>
+        </div>
+      </div>
+
+      <!-- Black Holes -->
+      <div class="card">
+        <div class="card-header">Black Holes</div>
+        <div class="card-body">
+          <div class="field"><span class="field-label">Max on screen</span><input class="input" id="bhMax" type="number" step="1" value="8"></div>
+          <div class="field"><span class="field-label">Spawn rate</span><input class="input" id="bhSpawnRate" type="number" step="0.1" value="0.8"></div>
+          <div class="field"><span class="field-label">Min mult to spawn</span><input class="input" id="bhMinMult" type="number" step="0.5" value="2"></div>
+          <div class="field"><span class="field-label">Gravity strength</span><input class="input" id="bhGravity" type="number" step="10" value="250"></div>
+          <div class="divider"></div>
+          <div class="field"><span class="field-label">Values</span><input class="input input-wide" id="bhVals" value="5,10,15,20,30,50,100"></div>
+          <div class="field"><span class="field-label">Weights</span><input class="input input-wide" id="bhWeights" value="20,25,20,15,10,7,3"></div>
+        </div>
+      </div>
+
+      <!-- Balance -->
+      <div class="card">
+        <div class="card-header">Balance & Bets</div>
+        <div class="card-body">
+          <div class="field"><span class="field-label">Starting balance</span><input class="input" id="startBal" type="number" step="100" value="1000"></div>
+          <div class="field"><span class="field-label">Min bet</span><input class="input" id="betMin" type="number" step="0.1" value="0.1"></div>
+          <div class="field"><span class="field-label">Max bet</span><input class="input" id="betMax" type="number" step="10" value="100"></div>
+          <div class="field"><span class="field-label">Max win cap</span><input class="input" id="winCap" type="number" step="1000" value="10000"></div>
+        </div>
+      </div>
+
+      <!-- Pilot Steer -->
+      <div class="card">
+        <div class="card-header">Pilot Auto-Steer</div>
+        <div class="card-body">
+          <div class="field"><span class="field-label">Token steer range</span><input class="input" id="steerTokenDist" type="number" step="50" value="500"></div>
+          <div class="field"><span class="field-label">Token steer force</span><input class="input" id="steerTokenX" type="number" step="0.5" value="2.5"></div>
+          <div class="field"><span class="field-label">BH steer range</span><input class="input" id="steerBhDist" type="number" step="50" value="350"></div>
+          <div class="field"><span class="field-label">BH steer force</span><input class="input" id="steerBhX" type="number" step="0.5" value="3"></div>
+          <div class="field"><span class="field-label">BH priority factor</span><input class="input" id="steerBhPriority" type="number" step="0.1" value="0.8"></div>
+        </div>
+      </div>
+
+      <!-- Suck Animation -->
+      <div class="card grid-full">
+        <div class="card-header">Black Hole Suck Animation</div>
+        <div class="card-body">
+          <div class="grid-2" style="gap:12px">
+            <div class="field"><span class="field-label">Suck duration (s)</span><input class="input" id="suckTime" type="number" step="0.05" value="0.4"></div>
+            <div class="field"><span class="field-label">Inside duration (s)</span><input class="input" id="insideTime" type="number" step="0.05" value="0.3"></div>
+            <div class="field"><span class="field-label">Eject duration (s)</span><input class="input" id="ejectTime" type="number" step="0.05" value="0.35"></div>
+            <div class="field"><span class="field-label">Eject distance (px)</span><input class="input" id="ejectDist" type="number" step="25" value="250"></div>
+            <div class="field"><span class="field-label">Speed boost</span><input class="input" id="bhSpeedBoost" type="number" step="0.01" value="0.03"></div>
+          </div>
+          <div class="field-hint">speed *= 1.5 + bhMult * boost value</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions-bar">
+      <button class="btn btn-primary" onclick="saveConfig()">Save & Apply</button>
+      <button class="btn btn-flat" onclick="resetToPreset()">Reset to Preset</button>
+      <button class="btn btn-danger" onclick="resetBalance()">Reset Balances</button>
+      <button class="btn btn-danger" onclick="clearAll()">Factory Reset</button>
+    </div>
+  </div>
+
+  <!-- ═══════ DASHBOARD ═══════ -->
+  <div class="tab-panel" id="tab-dashboard">
+    <div class="sec-bar">
+      <div class="sec-title">Dashboard</div>
+      <button class="btn btn-flat btn-sm" onclick="loadDashboard()">Refresh</button>
+    </div>
+    <div class="stat-grid" id="dashStats"></div>
+    <div class="chart-card"><div class="chart-label">Crash Point Distribution</div><div id="crashDistChart"></div></div>
+    <div class="chart-card"><div class="chart-label">Recent Crash Points</div><div class="dot-chart" id="crashDotChart"></div></div>
+    <div class="grid-2">
+      <div class="chart-card"><div class="chart-label">Win Rate</div><div id="winRateChart"></div></div>
+      <div class="chart-card"><div class="chart-label">Profit / Loss</div><div id="pnlChart"></div></div>
+    </div>
+  </div>
+
+  <!-- ═══════ ROUND HISTORY ═══════ -->
+  <div class="tab-panel" id="tab-rounds">
+    <div class="sec-bar">
+      <div class="sec-title">Round History</div>
+      <div class="sec-right">
+        <span class="count-chip" id="roundCountLabel">0 rounds</span>
+        <button class="btn btn-flat btn-sm" onclick="loadRoundHistory()">Refresh</button>
+      </div>
+    </div>
+    <div class="table-wrap" id="roundHistWrap">
+      <div class="table-scroll">
+        <table><thead><tr><th>#</th><th>Crash</th><th>Players</th><th>Total Bet</th><th>Result</th><th>Time</th></tr></thead>
+        <tbody id="roundHistBody"></tbody></table>
+      </div>
+    </div>
+    <div class="empty-msg" id="roundEmpty" style="display:none">No round history yet. Play some rounds first.</div>
+  </div>
+
+  <!-- ═══════ BET HISTORY ═══════ -->
+  <div class="tab-panel" id="tab-bets">
+    <div class="sec-bar">
+      <div class="sec-title">Bet History</div>
+      <div class="sec-right">
+        <span class="count-chip" id="betCountLabel">0 bets</span>
+        <button class="btn btn-flat btn-sm" onclick="loadBetHistory()">Refresh</button>
+      </div>
+    </div>
+    <div class="table-wrap" id="betHistWrap">
+      <div class="table-scroll">
+        <table><thead><tr><th>Round</th><th>Bet</th><th>Cashout</th><th>Win</th><th>P/L</th><th>Time</th></tr></thead>
+        <tbody id="betHistBody"></tbody></table>
+      </div>
+    </div>
+    <div class="empty-msg" id="betEmpty" style="display:none">No bet history yet. Place some bets first.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="fb-status" id="fbStatus" style="position:fixed;bottom:16px;right:16px;padding:8px 14px;border-radius:9999px;font-size:11px;font-weight:600;z-index:50;display:none"></div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="firebase-init.js"></script>
+
+<script>
+var PRESETS={
+  easy:{crashMode:'easy',crashMin:8,crashRange:20,crashBonusChance:40,crashBonusMax:50,betTime:6,explodeTime:2.2,crashWait:3,multSpeed:0.002,multAccel:0.00036,tokenMax:25,tokenSpawnRate:4,tokenBoost:40,tokenVals:'1.1,1.2,1.5,2.0,3.0,5.0,7.0,10.0',tokenWeights:'20,20,20,15,12,7,4,2',bhMax:8,bhSpawnRate:0.8,bhMinMult:2,bhGravity:250,bhVals:'5,10,15,20,30,50,100',bhWeights:'20,25,20,15,10,7,3',startBal:1000,betMin:0.1,betMax:100,winCap:10000,steerTokenDist:500,steerTokenX:2.5,steerBhDist:350,steerBhX:3,steerBhPriority:0.8,suckTime:0.4,insideTime:0.3,ejectTime:0.35,ejectDist:250,bhSpeedBoost:0.03},
+  normal:{crashMode:'normal',crashMin:1.2,crashRange:8,crashBonusChance:20,crashBonusMax:20,betTime:6,explodeTime:2.2,crashWait:3,multSpeed:0.002,multAccel:0.00036,tokenMax:20,tokenSpawnRate:3,tokenBoost:25,tokenVals:'1.1,1.2,1.5,2.0,3.0,5.0',tokenWeights:'25,25,20,15,10,5',bhMax:5,bhSpawnRate:0.4,bhMinMult:3,bhGravity:200,bhVals:'5,10,15,20,30',bhWeights:'30,30,20,12,8',startBal:1000,betMin:0.1,betMax:100,winCap:10000,steerTokenDist:400,steerTokenX:2,steerBhDist:300,steerBhX:2.5,steerBhPriority:0.7,suckTime:0.4,insideTime:0.3,ejectTime:0.35,ejectDist:250,bhSpeedBoost:0.02},
+  usual:{crashMode:'usual',crashMin:1.01,crashRange:0,crashBonusChance:0,crashBonusMax:0,betTime:6,explodeTime:2.2,crashWait:3,multSpeed:0.002,multAccel:0.00036,tokenMax:15,tokenSpawnRate:2.5,tokenBoost:15,tokenVals:'1.1,1.2,1.5,2.0,3.0,5.0',tokenWeights:'30,25,20,13,8,4',bhMax:3,bhSpawnRate:0.25,bhMinMult:4,bhGravity:180,bhVals:'5,10,15,20',bhWeights:'40,30,20,10',startBal:1000,betMin:0.1,betMax:100,winCap:10000,steerTokenDist:350,steerTokenX:1.8,steerBhDist:250,steerBhX:2,steerBhPriority:0.6,suckTime:0.4,insideTime:0.3,ejectTime:0.35,ejectDist:250,bhSpeedBoost:0.02}
+};
+var ALL_FIELDS=['crashMode','crashMin','crashRange','crashBonusChance','crashBonusMax','betTime','explodeTime','crashWait','multSpeed','multAccel','tokenMax','tokenSpawnRate','tokenBoost','tokenVals','tokenWeights','bhMax','bhSpawnRate','bhMinMult','bhGravity','bhVals','bhWeights','startBal','betMin','betMax','winCap','steerTokenDist','steerTokenX','steerBhDist','steerBhX','steerBhPriority','suckTime','insideTime','ejectTime','ejectDist','bhSpeedBoost'];
+
+function getConfig(){var c={};ALL_FIELDS.forEach(function(f){var e=document.getElementById(f);if(!e)return;c[f]=e.tagName==='SELECT'?e.value:e.type==='number'?parseFloat(e.value)||0:e.value});return c}
+function setConfig(c){ALL_FIELDS.forEach(function(f){var e=document.getElementById(f);if(e&&c[f]!==undefined)e.value=c[f]})}
+function applyPreset(n){setConfig(PRESETS[n]);document.querySelectorAll('.preset-chip').forEach(function(b){b.classList.remove('active')});document.getElementById('pre'+n.charAt(0).toUpperCase()+n.slice(1)).classList.add('active');saveConfig();toast('Mode: '+n+' applied')}
+function saveConfig(){
+  var cfg=getConfig();
+  localStorage.setItem('skydrop_admin_config',JSON.stringify(cfg));
+  // Save to Firebase if online
+  if(typeof FB!=='undefined'&&FB.isOnline()){
+    FB.saveConfig(cfg).then(function(){toast('Settings saved (synced)')}).catch(function(){toast('Settings saved (local only)')});
+  }else{toast('Settings saved')}
+}
+function resetToPreset(){var a=document.querySelector('.preset-chip.active');applyPreset(a?a.id.replace('pre','').toLowerCase():'easy')}
+function resetBalance(){localStorage.removeItem('skydrop_balance');toast('Balances reset')}
+function clearAll(){if(!confirm('Erase ALL game data?'))return;var k=[];for(var i=0;i<localStorage.length;i++){var x=localStorage.key(i);if(x&&x.startsWith('skydrop_'))k.push(x)};k.forEach(function(x){localStorage.removeItem(x)});
+  if(typeof FB!=='undefined'&&FB.isOnline()){FB.factoryReset().then(function(){toast('Factory reset done (local + cloud)')}).catch(function(){toast('Factory reset done (local only)')})}
+  else{toast('Factory reset done')}
+}
+function toast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2200)}
+
+function switchTab(n){
+  document.querySelectorAll('.tab-panel').forEach(function(t){t.classList.remove('active')});
+  document.querySelectorAll('.tab-btn').forEach(function(t){t.classList.remove('active')});
+  var p=document.getElementById('tab-'+n);if(p)p.classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(function(b){if(b.getAttribute('data-tab')===n)b.classList.add('active')});
+  if(n==='dashboard')loadDashboard();if(n==='rounds')loadRoundHistory();if(n==='bets')loadBetHistory();
+}
+function _ls(k){try{var v=localStorage.getItem('skydrop_'+k);return v?JSON.parse(v):null}catch(e){return null}}
+
+function loadDashboard(){
+  // Try Firebase first for round history, fall back to localStorage
+  if(typeof FB!=='undefined'&&FB.isOnline()){
+    FB.loadRounds().then(function(fbRounds){
+      var bh=_ls('betHistory')||[],totP=_ls('totP')||0,bestC=_ls('bestC')||0,bal=_ls('balance')||1000;
+      _renderDashboard(fbRounds.length?fbRounds:(_ls('history')||[]),bh,totP,bestC,bal);
+    });
+  }else{
+    var h=_ls('history')||[],bh=_ls('betHistory')||[],totP=_ls('totP')||0,bestC=_ls('bestC')||0,bal=_ls('balance')||1000;
+    _renderDashboard(h,bh,totP,bestC,bal);
+  }
+}
+function _renderDashboard(h,bh,totP,bestC,bal){
+  var tw=0,won=0,w=0,l=0;
+  bh.forEach(function(b){tw+=b.bet||0;if(b.win>0){won+=b.win;w++}else l++});
+  var avg=0;if(h.length){var s=0;h.forEach(function(r){s+=r.v||0});avg=s/h.length}
+  var wr=bh.length?((w/bh.length)*100).toFixed(1):'0.0';
+  var hp=tw-won;
+  document.getElementById('dashStats').innerHTML=
+    '<div class="stat-card"><div class="stat-value cyan">'+h.length+'</div><div class="stat-name">Rounds</div></div>'+
+    '<div class="stat-card"><div class="stat-value">'+bh.length+'</div><div class="stat-name">Total Bets</div></div>'+
+    '<div class="stat-card"><div class="stat-value gold">$'+bal.toFixed(2)+'</div><div class="stat-name">Balance</div></div>'+
+    '<div class="stat-card"><div class="stat-value">$'+tw.toFixed(2)+'</div><div class="stat-name">Wagered</div></div>'+
+    '<div class="stat-card"><div class="stat-value green">$'+won.toFixed(2)+'</div><div class="stat-name">Won</div></div>'+
+    '<div class="stat-card"><div class="stat-value '+(totP>=0?'green':'red')+'">$'+totP.toFixed(2)+'</div><div class="stat-name">Net P/L</div></div>'+
+    '<div class="stat-card"><div class="stat-value '+(wr>=50?'green':'red')+'">'+wr+'%</div><div class="stat-name">Win Rate</div></div>'+
+    '<div class="stat-card"><div class="stat-value gold">'+bestC.toFixed(2)+'x</div><div class="stat-name">Best Cashout</div></div>'+
+    '<div class="stat-card"><div class="stat-value cyan">'+avg.toFixed(2)+'x</div><div class="stat-name">Avg Crash</div></div>'+
+    '<div class="stat-card"><div class="stat-value '+(hp>=0?'green':'red')+'">$'+hp.toFixed(2)+'</div><div class="stat-name">House Profit</div></div>';
+  var bk=[{l:'1.0-1.5x',a:0,b:1.5,c:0,cl:'#f31260'},{l:'1.5-2.0x',a:1.5,b:2,c:0,cl:'#f5a524'},{l:'2.0-3.0x',a:2,b:3,c:0,cl:'#f5a524'},{l:'3.0-5.0x',a:3,b:5,c:0,cl:'#17c964'},{l:'5.0-10x',a:5,b:10,c:0,cl:'#17c964'},{l:'10-20x',a:10,b:20,c:0,cl:'#006FEE'},{l:'20-50x',a:20,b:50,c:0,cl:'#006FEE'},{l:'50x+',a:50,b:1e9,c:0,cl:'#7828c8'}];
+  h.forEach(function(r){for(var i=0;i<bk.length;i++){if(r.v>=bk[i].a&&r.v<bk[i].b){bk[i].c++;break}}});
+  var mx=Math.max.apply(null,bk.map(function(b){return b.c}))||1;
+  var dh='';bk.forEach(function(b){dh+='<div class="bar-row"><div class="bar-name">'+b.l+'</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(b.c/mx*100)+'%;background:'+b.cl+'"></div></div><div class="bar-count">'+b.c+'</div></div>'});
+  document.getElementById('crashDistChart').innerHTML=dh||'<div class="empty-msg">No data</div>';
+  var rc=h.slice(0,100).reverse(),dh2='',mxV=Math.max.apply(null,rc.map(function(r){return Math.min(r.v,50)}))||10;
+  rc.forEach(function(r){var v=Math.min(r.v,50),p=Math.max(8,Math.round(v/mxV*100)),c=v>=10?'#17c964':v>=5?'#006FEE':v>=2?'#f5a524':'#f31260';dh2+='<div class="dot-bar" style="height:'+p+'%;background:'+c+'" title="'+r.v.toFixed(2)+'x (#'+r.round+')"></div>'});
+  document.getElementById('crashDotChart').innerHTML=dh2||'<div class="empty-msg">No data</div>';
+  var tb=bh.length||1;
+  document.getElementById('winRateChart').innerHTML='<div class="bar-row"><div class="bar-name">Wins</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(w/tb*100)+'%;background:#17c964"></div></div><div class="bar-count">'+w+'</div></div><div class="bar-row"><div class="bar-name">Losses</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(l/tb*100)+'%;background:#f31260"></div></div><div class="bar-count">'+l+'</div></div>';
+  var pd=[],cm=0;bh.slice(0,30).reverse().forEach(function(b){cm+=(b.win||0)-b.bet;pd.push(cm)});
+  var pm=Math.max.apply(null,pd.map(function(v){return Math.abs(v)}))||1;
+  var ph='<div style="display:flex;align-items:center;gap:2px;height:80px">';
+  pd.forEach(function(v){ph+='<div style="width:8px;height:'+Math.max(4,Math.round(Math.abs(v)/pm*100))+'%;background:'+(v>=0?'#17c964':'#f31260')+';border-radius:3px;flex-shrink:0;align-self:'+(v>=0?'flex-end':'flex-start')+'" title="$'+v.toFixed(2)+'"></div>'});
+  ph+='</div>';document.getElementById('pnlChart').innerHTML=pd.length?ph:'<div class="empty-msg">No data</div>';
+}
+
+function loadRoundHistory(){
+  if(typeof FB!=='undefined'&&FB.isOnline()){
+    FB.loadRounds().then(function(fbRounds){_renderRoundHistory(fbRounds.length?fbRounds:(_ls('history')||[]))});
+  }else{_renderRoundHistory(_ls('history')||[])}
+}
+function _renderRoundHistory(h){
+  var bd=document.getElementById('roundHistBody'),wr=document.getElementById('roundHistWrap'),em=document.getElementById('roundEmpty');
+  document.getElementById('roundCountLabel').textContent=h.length+' rounds';
+  if(!h.length){bd.innerHTML='';wr.style.display='none';em.style.display='block';return}
+  wr.style.display='block';em.style.display='none';
+  var o='';h.forEach(function(r){var c=r.v>=5?'badge-success':r.v>=1.5?'badge-warning':'badge-danger',rs=r.result||'\u2014',rc=rs.indexOf('+')===0?'pnl-pos':rs.indexOf('-')===0?'pnl-neg':'pnl-zero';
+    o+='<tr><td>#'+r.round+'</td><td><span class="badge '+c+'">'+r.v.toFixed(2)+'x</span></td><td>'+r.players+'</td><td>$'+(r.totalBet||0).toFixed(2)+'</td><td class="'+rc+'">'+rs+'</td><td style="color:var(--foreground-400);font-size:12px">'+r.time+'</td></tr>'});
+  bd.innerHTML=o;
+}
+
+function loadBetHistory(){
+  var bh=_ls('betHistory')||[],bd=document.getElementById('betHistBody'),wr=document.getElementById('betHistWrap'),em=document.getElementById('betEmpty');
+  document.getElementById('betCountLabel').textContent=bh.length+' bets';
+  if(!bh.length){bd.innerHTML='';wr.style.display='none';em.style.display='block';return}
+  wr.style.display='block';em.style.display='none';
+  var o='';bh.forEach(function(b){var p=(b.win||0)-b.bet,pc=p>0?'pnl-pos':p<0?'pnl-neg':'pnl-zero',ps=p>=0?'+$'+p.toFixed(2):'-$'+Math.abs(p).toFixed(2),cs=b.win>0?b.mult.toFixed(2)+'x':'BUST',cc=b.win>0?'badge-success':'badge-danger',ts='\u2014';
+    if(b.time){try{ts=new Date(b.time).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}catch(e){}}
+    o+='<tr><td>#'+b.round+'</td><td>$'+b.bet.toFixed(2)+'</td><td><span class="badge '+cc+'">'+cs+'</span></td><td>$'+(b.win||0).toFixed(2)+'</td><td class="'+pc+'">'+ps+'</td><td style="color:var(--foreground-400);font-size:12px">'+ts+'</td></tr>'});
+  bd.innerHTML=o;
+}
+
+window.addEventListener('storage',function(e){
+  if(!e.key||!e.key.startsWith('skydrop_'))return;
+  var a=document.querySelector('.tab-panel.active');if(!a)return;
+  if(a.id==='tab-dashboard')loadDashboard();
+  else if(a.id==='tab-rounds')loadRoundHistory();
+  else if(a.id==='tab-bets')loadBetHistory();
+});
+
+// Load config: Firebase first, localStorage fallback
+function _initConfig(c){
+  if(!c)return;
+  setConfig(c);
+  var m=c.crashMode||'easy';
+  document.querySelectorAll('.preset-chip').forEach(function(b){b.classList.remove('active')});
+  var b=document.getElementById('pre'+m.charAt(0).toUpperCase()+m.slice(1));if(b)b.classList.add('active');
+}
+// First load from localStorage (instant)
+(function(){
+  var s=localStorage.getItem('skydrop_admin_config');
+  if(s){try{_initConfig(JSON.parse(s))}catch(e){}}
+})();
+// Then override from Firebase when ready
+if(typeof FB!=='undefined'){
+  FB.onReady(function(online){
+    var st=document.getElementById('fbStatus');
+    if(online){
+      st.textContent='Firebase Connected';st.style.display='block';st.style.background='#052814';st.style.color='#17c964';
+      setTimeout(function(){st.style.display='none'},3000);
+      // Load config from Firebase
+      FB.loadConfig().then(function(cfg){
+        if(cfg){_initConfig(cfg);localStorage.setItem('skydrop_admin_config',JSON.stringify(cfg))}
+      });
+      // Real-time dashboard updates
+      FB.onNewRound(function(){
+        var a=document.querySelector('.tab-panel.active');
+        if(a&&a.id==='tab-dashboard')loadDashboard();
+        else if(a&&a.id==='tab-rounds')loadRoundHistory();
+      });
+    }else{
+      st.textContent='Offline Mode (localStorage)';st.style.display='block';st.style.background='#312107';st.style.color='#f5a524';
+      setTimeout(function(){st.style.display='none'},3000);
+    }
+  });
+}
+</script>
+</body>
+</html>

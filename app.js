@@ -6,6 +6,66 @@
 
 var BET_TIME=6, EXPLODE_TIME=2.2, CRASH_WAIT=3;
 
+// ======================== ADMIN CONFIG ========================
+var CFG=(function(){
+  var defaults={
+    crashMode:'easy',crashMin:8,crashRange:20,crashBonusChance:40,crashBonusMax:50,
+    betTime:6,explodeTime:2.2,crashWait:3,multSpeed:0.002,multAccel:0.00036,
+    tokenMax:25,tokenSpawnRate:4,tokenBoost:40,
+    tokenVals:'1.1,1.2,1.5,2.0,3.0,5.0,7.0,10.0',tokenWeights:'20,20,20,15,12,7,4,2',
+    bhMax:8,bhSpawnRate:0.8,bhMinMult:2,bhGravity:250,
+    bhVals:'5,10,15,20,30,50,100',bhWeights:'20,25,20,15,10,7,3',
+    startBal:1000,betMin:0.1,betMax:100,winCap:10000,
+    steerTokenDist:500,steerTokenX:2.5,steerBhDist:350,steerBhX:3,steerBhPriority:0.8,
+    suckTime:0.4,insideTime:0.3,ejectTime:0.35,ejectDist:250,bhSpeedBoost:0.03
+  };
+  try{
+    var s=localStorage.getItem('skydrop_admin_config');
+    if(s){var parsed=JSON.parse(s);for(var k in parsed){if(parsed.hasOwnProperty(k))defaults[k]=parsed[k]}}
+  }catch(e){}
+  // Apply timers
+  BET_TIME=defaults.betTime||6;
+  EXPLODE_TIME=defaults.explodeTime||2.2;
+  CRASH_WAIT=defaults.crashWait||3;
+  // Parse comma arrays into number arrays
+  defaults._tokenVals=(defaults.tokenVals||'').split(',').map(Number).filter(function(n){return n>0});
+  defaults._tokenWeights=(defaults.tokenWeights||'').split(',').map(Number).filter(function(n){return n>0});
+  defaults._bhVals=(defaults.bhVals||'').split(',').map(Number).filter(function(n){return n>0});
+  defaults._bhWeights=(defaults.bhWeights||'').split(',').map(Number).filter(function(n){return n>0});
+  if(!defaults._tokenVals.length){defaults._tokenVals=[1.1,1.2,1.5,2.0,3.0,5.0,7.0,10.0];defaults._tokenWeights=[20,20,20,15,12,7,4,2]}
+  if(!defaults._bhVals.length){defaults._bhVals=[5,10,15,20,30,50,100];defaults._bhWeights=[20,25,20,15,10,7,3]}
+  return defaults;
+})();
+
+// ======================== HOT-RELOAD CONFIG ========================
+function _applyCfgUpdate(parsed){
+  for(var k in parsed){if(parsed.hasOwnProperty(k))CFG[k]=parsed[k]}
+  BET_TIME=CFG.betTime||6;
+  EXPLODE_TIME=CFG.explodeTime||2.2;
+  CRASH_WAIT=CFG.crashWait||3;
+  CFG._tokenVals=(CFG.tokenVals||'').split(',').map(Number).filter(function(n){return n>0});
+  CFG._tokenWeights=(CFG.tokenWeights||'').split(',').map(Number).filter(function(n){return n>0});
+  CFG._bhVals=(CFG.bhVals||'').split(',').map(Number).filter(function(n){return n>0});
+  CFG._bhWeights=(CFG.bhWeights||'').split(',').map(Number).filter(function(n){return n>0});
+  if(!CFG._tokenVals.length){CFG._tokenVals=[1.1,1.2,1.5,2.0,3.0,5.0,7.0,10.0];CFG._tokenWeights=[20,20,20,15,12,7,4,2]}
+  if(!CFG._bhVals.length){CFG._bhVals=[5,10,15,20,30,50,100];CFG._bhWeights=[20,25,20,15,10,7,3]}
+  console.log('[SkyDrop] Config hot-reloaded:',CFG.crashMode);
+}
+// localStorage fallback (same-origin cross-tab)
+window.addEventListener('storage',function(e){
+  if(e.key!=='skydrop_admin_config')return;
+  try{_applyCfgUpdate(JSON.parse(e.newValue||'{}'))}catch(err){}
+});
+// Firebase real-time config listener
+if(typeof FB!=='undefined'){
+  FB.onReady(function(online){
+    if(!online)return;
+    FB.onConfigChange(function(cfg){
+      try{_applyCfgUpdate(cfg)}catch(e){}
+    });
+  });
+}
+
 // ======================== SFX ENGINE ========================
 var sfx={
   ctx:null,soundOn:true,musicOn:true,soundVol:.7,musicVol:.4,
@@ -275,7 +335,7 @@ function _loadSaved(key,fallback){try{var v=localStorage.getItem('skydrop_'+key)
 function _save(key,val){try{localStorage.setItem('skydrop_'+key,JSON.stringify(val))}catch(e){}}
 
 var G={
-  balance:_loadSaved('balance',1000),
+  balance:_loadSaved('balance',CFG.startBal||1000),
   bets:[{amount:1,placed:false,out:false,cashMult:0},{amount:1,placed:false,out:false,cashMult:0}],
   phase:'INIT',phaseTimer:0,
   mult:1.0,crashPt:2.0,speed:0,
@@ -284,7 +344,7 @@ var G={
   rocket:{x:-60,y:-80,vx:35,vy:8,angle:0,curvePath:[],targetAlt:300},
   pilot:{x:0,y:0,vx:0,vy:0,chuteOpen:false,ejected:false,spin:0,ejectTime:0,seatFlame:0,_phase:'',_seatY:0,_bodyAngle:0,_drogueOpen:false,_canopyBlown:false},
   camera:{y:0,cx:-100,shake:0,zoom:1,zoomTarget:1,zoomX:0,zoomY:0},
-  stars:[],particles:[],tokens:[],
+  stars:[],particles:[],tokens:[],blackHoles:[],
   time:0,dt:0,lastFrame:0,lastMultFloor:0,
   autoBet:[false,false],autoCash:[false,false],
   _lastAltBand:-1
@@ -344,10 +404,18 @@ makeStars();
 
 // ======================== CRASH POINT ========================
 function genCrash(){
-  var r=Math.random();
-  if(r<0.03)return 1.0;
-  var cp=Math.floor(Math.max(1,0.97/r)*100)/100;
-  return isFinite(cp)?cp:2.0;
+  if(CFG.crashMode==='usual'){
+    // House-edge formula: classic crash distribution
+    var h=0.04; // 4% house edge
+    var r=Math.random();
+    var crash=Math.max(1.01,Math.floor((1/(1-r)*(1-h))*100)/100);
+    return crash;
+  }
+  // Easy/Normal mode — configurable min+bonus
+  var min=(CFG.crashMin||8)+Math.random()*(CFG.crashRange||20);
+  var bc=(CFG.crashBonusChance||40)/100;
+  var bonus=Math.random()<bc?Math.random()*(CFG.crashBonusMax||50):0;
+  return Math.floor((min+bonus)*100)/100;
 }
 
 // ======================== FAKE PLAYERS ========================
@@ -510,9 +578,11 @@ function addHist(v){try{
   var hash=_rndHex(128);
   var pNames=G.fPlayers?G.fPlayers.slice(0,3).map(function(p){return p.name||'Player'}):[];
   G.history.unshift({v:v,round:rnd,players:pCount,totalBet:tBet,result:myResult,resultColor:myResultColor,time:timeStr,serverSeed:srvSeed,hash:hash,playerNames:pNames});
-  if(G.history.length>16)G.history.pop();
+  if(G.history.length>200)G.history.pop();
   _save('history',G.history);
   _save('totR',G.totR);_save('totW',G.totW);_save('totP',G.totP);_save('bestC',G.bestC);_save('hiCr',G.hiCr);_save('betHistory',G.betHistory);
+  // Push round to Firebase for shared dashboard
+  if(typeof FB!=='undefined'&&FB.isOnline()){try{FB.pushRound({v:v,round:rnd,players:pCount,totalBet:tBet,result:myResult,time:timeStr})}catch(fe){}}
   var e=$('hs'),c=v>=5?'g':v>=1.5?'y':'r',d=document.createElement('div');d.className='hc '+c;d.textContent=v.toFixed(2)+'×';d.style.cursor='pointer';
   d.onclick=(function(info){return function(){showRoundInfo(info)}})(G.history[0]);
   e.insertBefore(d,e.firstChild);while(e.children.length>16)e.removeChild(e.lastChild)
@@ -556,8 +626,121 @@ function showRoundInfo(info){
 function updAlt(){try{$('altN').textContent=Math.round(G.alt).toLocaleString();$('altF').style.height=(Math.min(1,G.alt/G.MAX_ALT)*100)+'%'}catch(e){}}
 function updStats(){}
 function spawnParticles(x,y,type,n){if(G.particles.length>300)return;for(var i=0;i<(n||20);i++){var a=Math.random()*Math.PI*2,s=Math.random()*7+2;G.particles.push({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-(type==='gold'?3:0),life:1,r:Math.random()*3+2,hue:type==='fire'?Math.random()*40+10:Math.random()*30+40,sat:100,lit:50+Math.random()*30})}}
-function spawnToken(){if(G.tokens.length>25)return;var ty=G.pilot.y-(80+Math.random()*400),tx=G.pilot.x+(Math.random()-.5)*600;var bonusVals=[1.1,1.2,1.3,1.5,2.0,3.0,5.0,10.0],weights=[25,25,20,15,8,4,2,1],totalW=100;var r=Math.random()*totalW,dm=bonusVals[0];for(var i=0;i<weights.length;i++){r-=weights[i];if(r<=0){dm=bonusVals[i];break}}var c='#44ddaa',sz=12;if(dm>=10){c='#ffd700';sz=20}else if(dm>=5){c='#ff44aa';sz=18}else if(dm>=3){c='#ff6644';sz=16}else if(dm>=2){c='#ffaa00';sz=14}else if(dm>=1.5){c='#44ccff';sz=13}G.tokens.push({x:tx,y:ty,mult:dm,color:c,size:sz,pulse:Math.random()*6.28,collected:false,fadeOut:0})}
+function spawnToken(){if(G.tokens.length>(CFG.tokenMax||25))return;var ty=G.pilot.y-(80+Math.random()*400),tx=G.pilot.x+(Math.random()-.5)*600;var bonusVals=CFG._tokenVals,weights=CFG._tokenWeights,totalW=0;for(var w=0;w<weights.length;w++)totalW+=weights[w];var r=Math.random()*totalW,dm=bonusVals[0];for(var i=0;i<weights.length;i++){r-=weights[i];if(r<=0){dm=bonusVals[i];break}}var c='#44ddaa',sz=12;if(dm>=10){c='#ffd700';sz=20}else if(dm>=5){c='#ff44aa';sz=18}else if(dm>=3){c='#ff6644';sz=16}else if(dm>=2){c='#ffaa00';sz=14}else if(dm>=1.5){c='#44ccff';sz=13}G.tokens.push({x:tx,y:ty,mult:dm,color:c,size:sz,pulse:Math.random()*6.28,collected:false,fadeOut:0})}
 function showTokenPop(sx,sy,txt){try{var d=document.createElement('div');d.className='tkpop';d.textContent=txt;d.style.left=sx+'px';d.style.top=sy+'px';document.querySelector('.mid').appendChild(d);setTimeout(function(){d.remove()},900)}catch(e){}}
+// ======================== BLACK HOLES ========================
+function spawnBlackHole(){
+  if(G.blackHoles.length>=(CFG.bhMax||8))return;
+  var by=G.pilot.y-(80+Math.random()*400);
+  var bx=G.pilot.x+(Math.random()-.5)*600;
+  var bhVals=CFG._bhVals,bhW=CFG._bhWeights,tw=0;
+  for(var w=0;w<bhW.length;w++)tw+=bhW[w];
+  var rr=Math.random()*tw,mult=bhVals[0];
+  for(var i=0;i<bhW.length;i++){rr-=bhW[i];if(rr<=0){mult=bhVals[i];break}}
+  var sz=40+mult*1.5;
+  G.blackHoles.push({x:bx,y:by,r:sz,mult:mult,phase:Math.random()*6.28,active:true,hitAnim:0});
+}
+function checkBlackHoleCollision(){
+  for(var i=0;i<G.blackHoles.length;i++){
+    var bh=G.blackHoles[i];if(!bh.active)continue;
+    var dist=Math.hypot(G.pilot.x-bh.x,G.pilot.y-bh.y);
+    // Strong gravity pull — sucks pilot in
+    if(dist<bh.r*6&&dist>bh.r*1.3){
+      var strength=1-dist/(bh.r*6);
+      var pull=G.dt*(CFG.bhGravity||250)*strength*strength;
+      G.pilot.x+=(bh.x-G.pilot.x)/dist*pull;
+      G.pilot.y+=(bh.y-G.pilot.y)/dist*pull;
+      G.pilot.vx+=(bh.x-G.pilot.x)/dist*G.dt*40*strength;
+    }
+    // Collision — start suck-in animation
+    if(dist<bh.r*1.5&&!G.pilot._bhSuck){
+      G.pilot._bhSuck={bh:bh,phase:'suck',timer:0,startX:G.pilot.x,startY:G.pilot.y,exitAngle:Math.random()*Math.PI*2};
+      bh.active=false;bh.hitAnim=1;
+      G.camera.shake=4;
+      sfx.play('crash');
+      return;
+    }
+  }
+}
+// Black hole suck animation update — call each frame
+function updateBhSuck(){
+  var s=G.pilot._bhSuck;if(!s)return;
+  s.timer+=G.dt;
+  var bh=s.bh;
+  if(s.phase==='suck'){
+    var t=Math.min(s.timer/(CFG.suckTime||.4),1);
+    var ease=t*t;
+    G.pilot.x=s.startX+(bh.x-s.startX)*ease;
+    G.pilot.y=s.startY+(bh.y-s.startY)*ease;
+    G.pilot._bhScale=1-ease*.85;
+    G.pilot.spin+=G.dt*12;
+    G.camera.shake=4+t*6;
+    if(t>=1){s.phase='inside';s.timer=0;G.pilot._bhScale=0.1;}
+  } else if(s.phase==='inside'){
+    G.pilot.x=bh.x;G.pilot.y=bh.y;
+    G.pilot._bhScale=0;
+    G.camera.shake=8;
+    if(s.timer>=(CFG.insideTime||.3)){
+      // Apply multiplier boost from this hole's value
+      var bhMult=bh.mult||20;
+      if(G.mult<bhMult){G.mult=bhMult;G.speed*=1.5+bhMult*(CFG.bhSpeedBoost||.03)}
+      else{G.mult+=bhMult;G.speed*=1.3}
+      showAlert('🕳️ BLACK HOLE — '+bhMult+'× WARP!');
+      setCine(G.mult.toFixed(2)+'×','BLACK HOLE!');
+      try{$('cine').className='cine show gold'}catch(e){}
+      var bs=w2s(bh.x,bh.y);
+      spawnParticles(bs.x,bs.y,'fire',40);
+      // Eject pilot out the other side
+      var ea=s.exitAngle;
+      var _ed=CFG.ejectDist||250;
+      s.ejectX=bh.x+Math.cos(ea)*_ed;
+      s.ejectY=bh.y+Math.sin(ea)*_ed;
+      s.phase='eject';s.timer=0;
+      sfx.play('jump');
+    }
+  } else if(s.phase==='eject'){
+    var t=Math.min(s.timer/(CFG.ejectTime||.35),1);
+    var ease=1-Math.pow(1-t,3);
+    G.pilot.x=bh.x+(s.ejectX-bh.x)*ease;
+    G.pilot.y=bh.y+(s.ejectY-bh.y)*ease;
+    G.pilot._bhScale=0.15+ease*.85;
+    G.pilot.spin+=G.dt*8*(1-t);
+    G.camera.shake=6*(1-t);
+    if(t>=1){
+      G.pilot._bhSuck=null;
+      G.pilot._bhScale=1;
+      G.pilot.vx=(s.ejectX-bh.x)*.5;
+      G.pilot.vy=Math.abs(s.ejectY-bh.y)*.3;
+      // Immediately check crash after eject — don't wait for next frame
+      if(G.mult>=G.crashPt&&G.phase!=='CRASH'){
+        G.phase='CRASH';G.phaseTimer=0;
+        try{startCrashPhase()}catch(e){console.log('[SKYDROP] post-bh crash error:',e.message)}
+      }
+    }
+  }
+  // Safety timeout — force-cancel stuck suck animation after 3s
+  if(s&&s===G.pilot._bhSuck){
+    var totalTime=0;
+    if(s.phase==='suck')totalTime=s.timer;
+    else if(s.phase==='inside')totalTime=0.4+s.timer;
+    else if(s.phase==='eject')totalTime=0.7+s.timer;
+    if(totalTime>3){
+      console.log('[SKYDROP] Force-canceling stuck bhSuck animation');
+      // Apply multiplier if not yet applied
+      if(s.phase==='suck'||s.phase==='inside'){
+        var bhM=bh.mult||20;
+        if(G.mult<bhM)G.mult=bhM;else G.mult+=bhM;
+      }
+      G.pilot._bhSuck=null;
+      G.pilot._bhScale=1;
+      G.pilot.x=bh.x+100;G.pilot.y=bh.y+100;
+      if(G.mult>=G.crashPt&&G.phase!=='CRASH'){
+        G.phase='CRASH';G.phaseTimer=0;
+        try{startCrashPhase()}catch(e){}
+      }
+    }
+  }
+}
 
 // ======================== BET CONTROLS ========================
 var STEPS=[0.1,0.2,0.5,1,2,5,10,25,50,100];
@@ -591,16 +774,16 @@ function betAction(s){
     if(b.placed){G.balance+=b.amount;b.placed=false;G.totWg-=b.amount;updBal();updPanelBtn(s)}
     else{
       if(b.amount>G.balance){showAlert('💰 Insufficient balance');return}
-      if(b.amount<0.1||b.amount>100||!isFinite(b.amount))return;
+      if(b.amount<(CFG.betMin||0.1)||b.amount>(CFG.betMax||100)||!isFinite(b.amount))return;
       G.balance-=b.amount;b.placed=true;b.out=false;b.cashMult=0;G.totWg+=b.amount;updBal();sfx.play('bet');updPanelBtn(s)}
   }else if(G.phase==='FREEFALL'||(G.phase==='EXPLODE'&&G.pilot.ejected&&G.mult>1)){
     if(!b.placed||b.out)return;
     b.out=true;b.cashMult=G.mult;
-    var w=Math.min(10000,Math.max(0,b.amount*G.mult));
+    var w=Math.min(CFG.winCap||10000,Math.max(0,b.amount*G.mult));
     G.balance+=w;G.totP+=w-b.amount;G.totW++;
     if(G.mult>G.bestC)G.bestC=G.mult;
     G.betHistory.unshift({round:G.roundNum,bet:b.amount,mult:G.mult,win:w,time:new Date()});
-    if(G.betHistory.length>50)G.betHistory.pop();
+    if(G.betHistory.length>200)G.betHistory.pop();
     updBal();sfx.play('cashout');
     try{$('winAmt').textContent='+$'+w.toFixed(2)}catch(e){}
     spawnParticles(cv.width/2,cv.height/2,'gold',30);
@@ -659,7 +842,7 @@ function startBettingPhase(){
   G.rocket={x:-60,y:-80,vx:35,vy:8,angle:0,curvePath:[],targetAlt:flyAlt};
   G.pilot={x:0,y:0,vx:0,vy:0,chuteOpen:false,ejected:false,spin:0,ejectTime:0,seatFlame:0,_phase:'',_seatY:0,_bodyAngle:0,_drogueOpen:false,_canopyBlown:false};
   G.camera={y:-80,cx:-60,shake:0,zoom:1,zoomTarget:1,zoomX:cv.width/2,zoomY:cv.height*.4};
-  G.particles=[];G.tokens=[];
+  G.particles=[];G.tokens=[];G.blackHoles=[];G.pilot._bhSuck=null;G.pilot._bhScale=1;
   G.bets[0].placed=false;G.bets[0].out=false;G.bets[0].cashMult=0;
   G.bets[1].placed=false;G.bets[1].out=false;G.bets[1].cashMult=0;
   G.crashPt=genCrash();
@@ -686,7 +869,7 @@ function startExplodePhase(){
 
 function startFreefallPhase(){
   G.phase='FREEFALL';G.phaseTimer=0;
-  if(!G.mult||G.mult<1){G.mult=1.0;G.speed=0.002}
+  if(!G.mult||G.mult<1){G.mult=1.0;G.speed=CFG.multSpeed||0.002}
   G.lastMultFloor=Math.floor(G.mult);
   try{setSt('🪂 FREEFALL — CASH OUT ANYTIME!','s3');setCine(G.mult.toFixed(2)+'×','MULTIPLIER');G.camera.zoomTarget=0.95;updAllBtns();sfx.startFreefall()}catch(e){}
 }
@@ -696,6 +879,8 @@ function startCrashPhase(){
   // Phase and timer already set by caller
   if(G.phase!=='CRASH'){G.phase='CRASH';G.phaseTimer=0}
   // Force pilot to exist
+  // Force-clear any active black hole suck animation
+  G.pilot._bhSuck=null;G.pilot._bhScale=1;
   if(!G.pilot.ejected){G.pilot.ejected=true;G.pilot.x=G.rocket.x||0;G.pilot.y=G.rocket.y||0;G.pilot.vx=0;G.pilot.vy=0;G.pilot.spin=0;G.pilot._phase='freefall'}
   G.pilot.chuteOpen=true;G.pilot.vy=Math.min(G.pilot.vy||0,20);
   try{sfx.stopFreefall();sfx.play('chute')}catch(e){}
@@ -739,6 +924,14 @@ function update(ts){
     if(!isFinite(G.dt))G.dt=.016;
     if(!isFinite(G.mult))G.mult=1;
 
+    // WATCHDOG: if stuck in FREEFALL/EXPLODE for 60+ seconds, force crash
+    if((G.phase==='FREEFALL'&&G.phaseTimer>60)||(G.phase==='EXPLODE'&&G.phaseTimer>10)){
+      console.log('[SKYDROP] WATCHDOG: forcing crash, phase stuck at',G.phase,'for',G.phaseTimer.toFixed(1)+'s');
+      G.pilot._bhSuck=null;G.pilot._bhScale=1;
+      G.phase='CRASH';G.phaseTimer=0;
+      try{startCrashPhase()}catch(e){}
+    }
+
     // === BETTING ===
     if(G.phase==='BETTING'){
       G.phaseTimer-=G.dt;
@@ -773,7 +966,7 @@ function update(ts){
         G.pilot.vy=-2;G.pilot.vx=-3+(Math.random()-.5)*3;
         G.pilot.spin=0;G.pilot.ejectTime=0;G.pilot.seatFlame=0;
         G.pilot._phase='freefall';G.pilot._seatY=0;G.pilot._bodyAngle=0;G.pilot._drogueOpen=false;G.pilot._canopyBlown=false;G.pilot.chuteOpen=false;
-        G.mult=1.0;G.speed=0.002;G.lastMultFloor=0;
+        G.mult=1.0;G.speed=CFG.multSpeed||0.002;G.lastMultFloor=0;
         sfx.play('jump');G.camera.shake=1.5;G.camera.zoomTarget=0.95;updAllBtns();
       }
       if(!G.pilot.ejected){
@@ -784,7 +977,7 @@ function update(ts){
       }else{
         G.pilot.vy-=G.dt*25;G.pilot.y+=G.pilot.vy*G.dt;G.pilot.x+=G.pilot.vx*G.dt;G.pilot.x+=Math.sin(G.time*4)*G.dt*3;
         G.pilot.spin+=G.dt*1.2;G.pilot._bodyAngle+=(0-G.pilot._bodyAngle)*G.dt*3;
-        G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*0.000006*60;
+        G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*(CFG.multAccel||0.00036);
         setCine(G.mult.toFixed(2)+'×','FREEFALL');
         try{$('cine').className='cine show'+(G.mult>=8?' gold':G.mult>=4?' wrn':'')}catch(e){}
         setSt('🪂 CASH OUT — '+G.mult.toFixed(2)+'×','s3');
@@ -793,7 +986,14 @@ function update(ts){
         G.alt=Math.max(0,G.pilot.y*10);updAlt();
         G.camera.cx+=(G.pilot.x-G.camera.cx)*.1;
         G.camera.y+=(G.pilot.y-G.camera.y)*.1;
-        if(G.mult>=G.crashPt){
+        // Black holes after 2x — same timing as tokens
+        if(G.mult>=(CFG.bhMinMult||2)&&Math.random()<G.dt*(CFG.bhSpawnRate||.8))spawnBlackHole();
+        try{checkBlackHoleCollision();updateBhSuck()}catch(bhErr){console.log('[SKYDROP] BH error (explode):',bhErr.message);G.pilot._bhSuck=null;G.pilot._bhScale=1}
+        G.blackHoles=G.blackHoles.filter(function(bh){if(!bh.active){bh.hitAnim-=G.dt*2;return bh.hitAnim>0}var sy=w2s(bh.x,bh.y).y;return sy>-200&&sy<cv.height+200});
+        // Safety: clamp mult/speed
+        if(!isFinite(G.mult)||G.mult>99999)G.mult=G.crashPt+1;
+        if(!isFinite(G.speed)||G.speed>10)G.speed=0.01;
+        if(G.pilot._bhSuck){}else if(G.mult>=G.crashPt){
           G.phase='CRASH';G.phaseTimer=0;
           try{startCrashPhase()}catch(e){console.log('[SKYDROP] crashPhase error:',e.message)}
         }
@@ -804,14 +1004,26 @@ function update(ts){
     // === FREEFALL ===
     else if(G.phase==='FREEFALL'){
       G.phaseTimer+=G.dt;
-      G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*0.000006*60;
+      G.mult+=G.speed*G.mult*G.dt*30;G.speed+=G.dt*(CFG.multAccel||0.00036);
+      // Safety: clamp mult/speed to prevent Infinity/NaN
+      if(!isFinite(G.mult)||G.mult>99999)G.mult=G.crashPt+1;
+      if(!isFinite(G.speed)||G.speed>10)G.speed=0.01;
+      try{
       G.rocket.x+=G.rocket.vx*G.dt;G.rocket.y+=G.rocket.vy*G.dt;
       updatePilotPhysics();
-      // Pilot steers toward nearest token
+      // Pilot steers toward nearest token or black hole
       var nearTk=null,nearDist=Infinity;
       G.tokens.forEach(function(tk){if(tk.collected)return;var d=Math.hypot(G.pilot.x-tk.x,G.pilot.y-tk.y);if(d<nearDist){nearDist=d;nearTk=tk}});
-      if(nearTk&&nearDist<500){
-        var steerX=(nearTk.x-G.pilot.x)*G.dt*2.5;
+      // Sometimes steer toward nearest black hole instead
+      var nearBh=null,nearBhDist=Infinity;
+      G.blackHoles.forEach(function(bh){if(!bh.active)return;var d=Math.hypot(G.pilot.x-bh.x,G.pilot.y-bh.y);if(d<nearBhDist){nearBhDist=d;nearBh=bh}});
+      if(nearBh&&nearBhDist<(CFG.steerBhDist||350)&&(!nearTk||nearBhDist<nearDist*(CFG.steerBhPriority||0.8))){
+        var steerX=(nearBh.x-G.pilot.x)*G.dt*(CFG.steerBhX||3);
+        var steerY=(nearBh.y-G.pilot.y)*G.dt*1.2;
+        G.pilot.x+=steerX;G.pilot.y+=steerY*.4;
+        G.pilot.vx+=(nearBh.x>G.pilot.x?1:-1)*G.dt*20;
+      } else if(nearTk&&nearDist<(CFG.steerTokenDist||500)){
+        var steerX=(nearTk.x-G.pilot.x)*G.dt*(CFG.steerTokenX||2.5);
         var steerY=(nearTk.y-G.pilot.y)*G.dt*.8;
         G.pilot.x+=steerX;G.pilot.y+=steerY*.3;
         G.pilot.vx+=(nearTk.x>G.pilot.x?1:-1)*G.dt*15;
@@ -826,13 +1038,21 @@ function update(ts){
       setSt('🪂 CASH OUT — '+G.mult.toFixed(2)+'×','s3');
       try{for(var i=0;i<2;i++){if(G.bets[i].placed&&!G.bets[i].out){$('btn'+(i+1)).querySelector('.bb-amount').textContent=(G.bets[i].amount*G.mult).toFixed(2)+' USD'}}}catch(e){}
       try{for(var j=0;j<2;j++){if(G.autoCash[j]&&G.bets[j].placed&&!G.bets[j].out){var ac=parseFloat($('au'+(j+1)).value);if(ac>0&&G.mult>=ac)betAction(j+1)}}}catch(e){}
-      if(Math.random()<G.dt*4)spawnToken();
-      G.tokens.forEach(function(tk){if(tk.collected)return;var dx=Math.abs(G.pilot.x-tk.x),dy=G.pilot.y-tk.y;if(dy<50&&dy>-50&&dx<80){tk.collected=true;tk.fadeOut=1;sfx.play('token');var sp=w2s(tk.x,tk.y);spawnParticles(sp.x,sp.y,'gold',8);showTokenPop(sp.x-20,sp.y-20,'×'+tk.mult.toFixed(1));G.mult*=(1+(tk.mult-1)*.1)}});
+      if(Math.random()<G.dt*(CFG.tokenSpawnRate||4))spawnToken();
+      var _tkBoost=(CFG.tokenBoost||40)/100;
+      G.tokens.forEach(function(tk){if(tk.collected)return;var dx=Math.abs(G.pilot.x-tk.x),dy=G.pilot.y-tk.y;if(dy<50&&dy>-50&&dx<80){tk.collected=true;tk.fadeOut=1;sfx.play('token');var sp=w2s(tk.x,tk.y);spawnParticles(sp.x,sp.y,'gold',8);showTokenPop(sp.x-20,sp.y-20,'×'+tk.mult.toFixed(1));G.mult*=(1+(tk.mult-1)*_tkBoost)}});
       G.tokens=G.tokens.filter(function(tk){if(tk.collected){tk.fadeOut-=G.dt*3;return tk.fadeOut>0}var sy=w2s(tk.x,tk.y).y;return sy>-100&&sy<cv.height+200});
+      // Black holes
+      if(G.mult>=(CFG.bhMinMult||2)&&Math.random()<G.dt*(CFG.bhSpawnRate||.8))spawnBlackHole();
+      try{checkBlackHoleCollision();updateBhSuck()}catch(bhErr){console.log('[SKYDROP] BH error:',bhErr.message);G.pilot._bhSuck=null;G.pilot._bhScale=1}
+      // Clean up off-screen / hit black holes
+      G.blackHoles=G.blackHoles.filter(function(bh){if(!bh.active){bh.hitAnim-=G.dt*2;return bh.hitAnim>0}var sy=w2s(bh.x,bh.y).y;return sy>-200&&sy<cv.height+200});
       if(Math.random()<G.dt*.15){showAlert(['💨 CROSSWIND','⚠ TURBULENCE','💨 WIND SHEAR'][Math.floor(Math.random()*3)]);sfx.play('wind');G.camera.shake=2}
       var mf=Math.floor(G.mult);if(mf>G.lastMultFloor&&mf>=2){sfx.play('tick');G.lastMultFloor=mf}
       if(Math.random()<.025)fakeFeed(G.mult*(.5+Math.random()*.6),true);
-      if(G.mult>=G.crashPt){
+      }catch(ffErr){console.log('[SKYDROP] Freefall error:',ffErr.message);G.pilot._bhSuck=null;G.pilot._bhScale=1}
+      // CRASH CHECK — runs even if above code throws
+      if(!G.pilot._bhSuck&&G.mult>=G.crashPt){
         G.phase='CRASH';G.phaseTimer=0;
         try{startCrashPhase()}catch(e){console.log('[SKYDROP] crashPhase error:',e.message)}
       }
@@ -841,6 +1061,8 @@ function update(ts){
     // === CRASH ===
     else if(G.phase==='CRASH'){
       G.phaseTimer+=G.dt;
+      // Safety: finish any lingering bhSuck animation
+      if(G.pilot._bhSuck){updateBhSuck();G.pilot._bhSuck=null;G.pilot._bhScale=1;}
       if(G.phaseTimer<0.1||G.phaseTimer>2.9)console.log('[SKYDROP] CRASH phase tick, timer:',G.phaseTimer.toFixed(2));
       if(G.pilot.ejected){G.pilot.y-=(15+G.phaseTimer)*G.dt;G.pilot.x+=Math.sin(G.time*1.5)*.4}
       G.alt=Math.max(0,(G.pilot.ejected?G.pilot.y:G.rocket.y)*10);updAlt();
@@ -1371,6 +1593,54 @@ function render(){
       }
     }
   }
+  // === BLACK HOLES ===
+  if(G.phase==='EXPLODE'||G.phase==='FREEFALL'||G.phase==='CRASH'){G.blackHoles.forEach(bh=>{
+    const bs=w2s(bh.x,bh.y);if(bs.y<-150||bs.y>H+150)return;
+    const t=G.time;const alpha=bh.active?1:bh.hitAnim;const r=bh.r;const pulse=1+Math.sin(t*3+bh.phase)*.15;
+    cx.save();
+    // Big pulsing outer glow
+    cx.globalAlpha=alpha*.25;
+    const og=cx.createRadialGradient(bs.x,bs.y,r,bs.x,bs.y,r*3.5*pulse);
+    og.addColorStop(0,'rgba(160,60,255,.5)');og.addColorStop(.4,'rgba(120,30,200,.2)');og.addColorStop(1,'transparent');
+    cx.fillStyle=og;cx.beginPath();cx.arc(bs.x,bs.y,r*3.5*pulse,0,Math.PI*2);cx.fill();
+    // Outer distortion rings
+    cx.globalAlpha=alpha*.2;
+    for(let ring=3;ring>=1;ring--){
+      const rr=r*(1.8+ring*.6)+Math.sin(t*2+ring)*3;
+      const grd=cx.createRadialGradient(bs.x,bs.y,rr*.6,bs.x,bs.y,rr);
+      grd.addColorStop(0,'transparent');grd.addColorStop(.5,'rgba(100,60,180,.4)');grd.addColorStop(.8,'rgba(180,80,255,.2)');grd.addColorStop(1,'transparent');
+      cx.fillStyle=grd;cx.beginPath();cx.arc(bs.x,bs.y,rr,0,Math.PI*2);cx.fill();
+    }
+    // Accretion disk — swirling ring
+    cx.globalAlpha=alpha*.7;
+    cx.save();cx.translate(bs.x,bs.y);cx.rotate(t*1.5+bh.phase);
+    for(let i=0;i<16;i++){
+      const a=i/16*Math.PI*2;const dr=r*1.4+Math.sin(a*3+t*4)*5;
+      const sx2=Math.cos(a)*dr,sy2=Math.sin(a)*dr*.45;
+      const sz=4+Math.sin(a*2+t*5)*2;
+      const hue=260+Math.sin(a+t)*40;
+      cx.fillStyle=`hsla(${hue},80%,60%,${.5+Math.sin(a*2+t*3)*.3})`;
+      cx.beginPath();cx.arc(sx2,sy2,sz,0,Math.PI*2);cx.fill();
+    }
+    cx.restore();
+    // Event horizon — dark center
+    cx.globalAlpha=alpha;
+    const evg=cx.createRadialGradient(bs.x,bs.y,0,bs.x,bs.y,r*1.1);
+    evg.addColorStop(0,'rgba(0,0,0,.98)');evg.addColorStop(.6,'rgba(0,0,0,.95)');evg.addColorStop(.85,'rgba(30,0,60,.7)');evg.addColorStop(1,'transparent');
+    cx.fillStyle=evg;cx.beginPath();cx.arc(bs.x,bs.y,r*1.1,0,Math.PI*2);cx.fill();
+    // Multiplier text — color based on value
+    var bhM=bh.mult||20;
+    var mCol=bhM>=50?'#ffd700':bhM>=20?'#ff44aa':bhM>=10?'#ff6644':bhM>=5?'#44ccff':'#e0a0ff';
+    cx.globalAlpha=alpha;cx.textAlign='center';cx.textBaseline='middle';
+    cx.fillStyle=mCol;cx.font='800 '+Math.round(r*.85)+'px Oxanium';
+    cx.shadowColor=mCol;cx.shadowBlur=14;
+    cx.fillText(bhM+'×',bs.x,bs.y);
+    cx.shadowBlur=0;
+    // Label below
+    cx.globalAlpha=alpha*.9;cx.fillStyle=mCol;cx.font='bold 11px Oxanium';
+    cx.fillText('🕳️ BLACK HOLE',bs.x,bs.y+r*1.3+16);
+    cx.globalAlpha=1;cx.restore();
+  })}
   // === TOKENS ===
   if(G.phase==='FREEFALL'||G.phase==='CRASH'){G.tokens.forEach(tk=>{const ts=w2s(tk.x,tk.y);if(ts.y<-80||ts.y>H+80)return;const alpha=tk.collected?tk.fadeOut:1;const pulse=1+Math.sin(G.time*4+tk.pulse)*.12;const r=tk.size*pulse;cx.globalAlpha=alpha*.3;const grd=cx.createRadialGradient(ts.x,ts.y,0,ts.x,ts.y,r*3);grd.addColorStop(0,tk.color);grd.addColorStop(1,'transparent');cx.fillStyle=grd;cx.beginPath();cx.arc(ts.x,ts.y,r*3,0,Math.PI*2);cx.fill();cx.globalAlpha=alpha;cx.fillStyle=tk.color;cx.beginPath();cx.arc(ts.x,ts.y,r,0,Math.PI*2);cx.fill();cx.fillStyle='rgba(255,255,255,.35)';cx.beginPath();cx.arc(ts.x-r*.2,ts.y-r*.25,r*.4,0,Math.PI*2);cx.fill();cx.strokeStyle=tk.color;cx.lineWidth=1.5;cx.globalAlpha=alpha*.4;cx.beginPath();cx.arc(ts.x,ts.y,r*1.6*pulse,0,Math.PI*2);cx.stroke();cx.globalAlpha=alpha;cx.fillStyle='#fff';cx.font=`800 ${tk.size>=16?13:11}px Oxanium`;cx.textAlign='center';cx.textBaseline='middle';cx.fillText('×'+tk.mult.toFixed(1),ts.x,ts.y);cx.globalAlpha=1})}
   // === PILOT ===
@@ -1378,7 +1648,11 @@ function render(){
     const ps=w2s(G.pilot.x,G.pilot.y);
     if(G.pilot.chuteOpen){const glw=cx.createRadialGradient(ps.x,ps.y-20,0,ps.x,ps.y-20,80);glw.addColorStop(0,'rgba(255,100,50,.04)');glw.addColorStop(1,'transparent');cx.fillStyle=glw;cx.beginPath();cx.arc(ps.x,ps.y-20,80,0,Math.PI*2);cx.fill()}
     cx.save();cx.translate(ps.x,ps.y);
-    var pilotScale=innerWidth<900?1.4:1.6;cx.scale(pilotScale,pilotScale);
+    var pilotScale=innerWidth<900?1.4:1.6;
+    var bhS=G.pilot._bhScale!=null?G.pilot._bhScale:1;
+    pilotScale*=bhS;
+    if(bhS<0.05){cx.restore();}else{
+    cx.scale(pilotScale,pilotScale);
     const crashed=false;const inEject=!G.pilot.chuteOpen&&!crashed;
     const et=G.pilot.ejectTime;const ba=G.pilot._bodyAngle||0;
     const sway=G.pilot.chuteOpen&&!crashed?Math.sin(G.time*2.2)*8+Math.sin(G.time*3.5)*3+Math.cos(G.time*1.3)*2:0;
@@ -1487,6 +1761,7 @@ function render(){
     }
     // Wind streaks
     if(inEject&&et<1){cx.globalAlpha=.15*(1-et);cx.strokeStyle='rgba(200,220,255,.4)';cx.lineWidth=1;for(let i=0;i<5;i++){const wy=Math.random()*50-25,wx=Math.random()*40-20;cx.beginPath();cx.moveTo(px+wx,wy);cx.lineTo(px+wx,wy+15+Math.random()*15);cx.stroke()}cx.globalAlpha=1}
+    } // end else (bhS >= 0.05)
     cx.restore();
   }
   // Particles
@@ -1599,16 +1874,37 @@ function toggleMobileChat(){
     if(ov.classList.contains('open'))_renderChat('mChatMessages');
   }
 }
+var _fbChatActive=false;
 function sendChat(){
   var inp=document.getElementById('chatInput');
   var mInp=document.getElementById('mChatInput');
   var text=(inp&&inp.value.trim())||(mInp&&mInp.value.trim())||'';
   if(!text)return;
-  _addChatMsg(_selectedName,_selectedAvatar,'rgba(76,175,80,.12)',text,true);
+  // If Firebase chat is active, send via Firebase (it will come back via listener)
+  if(_fbChatActive&&typeof FB!=='undefined'&&FB.isOnline()){
+    FB.sendChatMsg({name:_selectedName,avatar:_selectedAvatar,bg:'rgba(76,175,80,.12)',text:text});
+  }else{
+    _addChatMsg(_selectedName,_selectedAvatar,'rgba(76,175,80,.12)',text,true);
+  }
   if(inp)inp.value='';
   if(mInp)mInp.value='';
   // Close any open pickers
   document.querySelectorAll('.chat-picker.open').forEach(function(p){p.classList.remove('open')});
+}
+// Firebase chat listener — receive messages from all players in real-time
+if(typeof FB!=='undefined'){
+  FB.onReady(function(online){
+    if(!online)return;
+    _fbChatActive=true;
+    _chatHistory=[];// Clear local-only history, Firebase is source of truth
+    FB.onChat(function(msg){
+      var m={name:msg.name,avatar:msg.avatar,bg:msg.bg||'rgba(76,175,80,.12)',text:msg.text,time:msg.timeStr,isMe:msg.isMe};
+      _chatHistory.push(m);
+      if(_chatHistory.length>80)_chatHistory.shift();
+      _renderChat('chatMessages');
+      _renderChat('mChatMessages');
+    });
+  });
 }
 // ======================== EMOJI & GIF PICKER ========================
 // GIPHY Integration — get your FREE key at https://developers.giphy.com/dashboard/
