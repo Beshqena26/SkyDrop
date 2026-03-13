@@ -1123,7 +1123,7 @@ function startBettingPhase(){
   try{populateSidebar()}catch(e){}
   try{sfx.stopFreefall();sfx.play('launch')}catch(e){}
   // Auto bet
-  for(var i=0;i<2;i++){try{if(G.autoBet[i]&&G.bets[i].amount>=(CFG.betMin||0.1)&&G.bets[i].amount<=(CFG.betMax||100)&&G.bets[i].amount<=G.balance){G.balance-=G.bets[i].amount;G.bets[i].placed=true;G.bets[i].out=false;G.bets[i].cashMult=0;G.totWg+=G.bets[i].amount;updBal();updPanelBtn(i+1)}}catch(e){}}
+  for(var i=0;i<2;i++){try{if(G.autoBet[i]&&G.bets[i].amount>=(CFG.betMin||0.1)&&G.bets[i].amount<=(CFG.betMax||100)&&G.bets[i].amount<=G.balance){G.balance-=G.bets[i].amount;G.bets[i].placed=true;G.bets[i].out=false;G.bets[i].cashMult=0;G.totWg+=G.bets[i].amount;updBal();updPanelBtn(i+1);if(SYNC.enabled){try{FB.writeBet(G.roundNum,{name:_selectedName||'Player',avatar:_selectedAvatar||'🧑‍✈️',bet:G.bets[i].amount,slot:i+1,cashMult:0})}catch(e2){}}}}catch(e){}}
 }
 
 function startExplodePhase(){
