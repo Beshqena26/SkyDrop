@@ -50,7 +50,10 @@ canvas{position:fixed;top:0;left:0;z-index:1}
 .bm.wm{background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.15)}
 .bm.wm .bt{color:rgba(255,215,0,.6)}.bm.wm .bb{color:var(--gld);text-shadow:0 0 40px rgba(255,215,0,.4)}
 .tkpop{position:absolute;pointer-events:none;font-family:'Oxanium',sans-serif;font-weight:800;font-size:18px;color:var(--gld);text-shadow:0 0 10px rgba(255,215,0,.5);animation:tkf .8s ease-out forwards;z-index:18}
+.tkpop.boost{font-size:22px;color:#4caf50;text-shadow:0 0 16px rgba(76,175,80,.6),0 0 40px rgba(76,175,80,.2);animation:boostf 1.4s ease-out forwards}
+.tkpop.bh-boost{font-size:26px;color:#e040fb;text-shadow:0 0 20px rgba(224,64,251,.6),0 0 50px rgba(224,64,251,.3);animation:boostf 1.8s ease-out forwards}
 @keyframes tkf{0%{opacity:1;transform:translateY(0) scale(1)}60%{opacity:.8;transform:translateY(-20px) scale(1.15)}100%{opacity:0;transform:translateY(-40px) scale(.8)}}
+@keyframes boostf{0%{opacity:1;transform:translateY(0) scale(1.2)}30%{opacity:1;transform:translateY(-15px) scale(1.35)}70%{opacity:.9;transform:translateY(-35px) scale(1.1)}100%{opacity:0;transform:translateY(-60px) scale(.7)}}
 /* ============ BOTTOM PANEL — MOBILE FIRST ============ */
 .bottom-dock{display:none}
 .bp{flex-shrink:0;background:rgba(15,21,32,.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);padding:0 4px var(--sab);border-top:1px solid rgba(255,255,255,.04);display:flex;flex-direction:column;gap:2px;margin-top:auto}

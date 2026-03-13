@@ -866,7 +866,7 @@ function updAlt(){try{$('altN').textContent=Math.round(G.alt).toLocaleString();$
 function updStats(){}
 function spawnParticles(x,y,type,n){if(G.particles.length>300)return;for(var i=0;i<(n||20);i++){var a=Math.random()*Math.PI*2,s=Math.random()*7+2;G.particles.push({x:x,y:y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-(type==='gold'?3:0),life:1,r:Math.random()*3+2,hue:type==='fire'?Math.random()*40+10:Math.random()*30+40,sat:100,lit:50+Math.random()*30})}}
 function spawnToken(){if(G.tokens.length>(CFG.tokenMax||25))return;var ty=G.pilot.y-(80+Math.random()*400),tx=G.pilot.x+(Math.random()-.5)*600;var bonusVals=CFG._tokenVals,weights=CFG._tokenWeights,totalW=0;for(var w=0;w<weights.length;w++)totalW+=weights[w];var r=Math.random()*totalW,dm=bonusVals[0];for(var i=0;i<weights.length;i++){r-=weights[i];if(r<=0){dm=bonusVals[i];break}}var c='#44ddaa',sz=12;if(dm>=10){c='#ffd700';sz=20}else if(dm>=5){c='#ff44aa';sz=18}else if(dm>=3){c='#ff6644';sz=16}else if(dm>=2){c='#ffaa00';sz=14}else if(dm>=1.5){c='#44ccff';sz=13}G.tokens.push({x:tx,y:ty,mult:dm,color:c,size:sz,pulse:Math.random()*6.28,collected:false,fadeOut:0})}
-function showTokenPop(sx,sy,txt){try{var d=document.createElement('div');d.className='tkpop';d.textContent=txt;d.style.left=sx+'px';d.style.top=sy+'px';document.querySelector('.mid').appendChild(d);setTimeout(function(){d.remove()},900)}catch(e){}}
+function showTokenPop(sx,sy,txt,cls){try{var d=document.createElement('div');d.className='tkpop'+(cls?' '+cls:'');d.textContent=txt;d.style.left=sx+'px';d.style.top=sy+'px';document.querySelector('.mid').appendChild(d);setTimeout(function(){d.remove()},cls?1800:900)}catch(e){}}
 // ======================== BLACK HOLES ========================
 function spawnBlackHole(){
   if(G.blackHoles.length>=(CFG.bhMax||8))return;
@@ -922,13 +922,17 @@ function updateBhSuck(){
     if(s.timer>=(CFG.insideTime||.3)){
       // Apply multiplier boost from this hole's value
       var bhMult=bh.mult||20;
+      var _oldMult=G.mult;
       if(G.mult<bhMult){G.mult=bhMult;G.speed*=1.5+bhMult*(CFG.bhSpeedBoost||.03)}
       else{G.mult+=bhMult;G.speed*=1.3}
-      showAlert('🕳️ BLACK HOLE — '+bhMult+'× WARP!');
+      var _bhAdded=G.mult-_oldMult;
+      G.crashPt+=_bhAdded;
+      showAlert('🕳️ '+_oldMult.toFixed(2)+'× + '+_bhAdded.toFixed(2)+'× = '+G.mult.toFixed(2)+'×');
       setCine(G.mult.toFixed(2)+'×','BLACK HOLE!');
       try{$('cine').className='cine show gold'}catch(e){}
       var bs=w2s(bh.x,bh.y);
       spawnParticles(bs.x,bs.y,'fire',40);
+      showTokenPop(bs.x-40,bs.y-50,_oldMult.toFixed(2)+'× + '+_bhAdded.toFixed(2)+'× = '+G.mult.toFixed(2)+'×','bh-boost');
       // Eject pilot out the other side
       var ea=s.exitAngle;
       var _ed=CFG.ejectDist||250;
@@ -1287,7 +1291,7 @@ function update(ts){
       try{for(var j=0;j<2;j++){if(G.autoCash[j]&&G.bets[j].placed&&!G.bets[j].out){var ac=parseFloat($('au'+(j+1)).value);if(ac>0&&G.mult>=ac)betAction(j+1)}}}catch(e){}
       if(Math.random()<G.dt*(CFG.tokenSpawnRate||4))spawnToken();
       var _tkBoost=(CFG.tokenBoost||40)/100;
-      G.tokens.forEach(function(tk){if(tk.collected)return;var dx=Math.abs(G.pilot.x-tk.x),dy=G.pilot.y-tk.y;if(dy<50&&dy>-50&&dx<80){tk.collected=true;tk.fadeOut=1;sfx.play('token');var sp=w2s(tk.x,tk.y);spawnParticles(sp.x,sp.y,'gold',8);showTokenPop(sp.x-20,sp.y-20,'×'+tk.mult.toFixed(1));G.mult*=(1+(tk.mult-1)*_tkBoost)}});
+      G.tokens.forEach(function(tk){if(tk.collected)return;var dx=Math.abs(G.pilot.x-tk.x),dy=G.pilot.y-tk.y;if(dy<50&&dy>-50&&dx<80){tk.collected=true;tk.fadeOut=1;sfx.play('token');var sp=w2s(tk.x,tk.y);var _prevMult=G.mult;var _tkMul=(1+(tk.mult-1)*_tkBoost);G.mult*=_tkMul;G.crashPt*=_tkMul;var _addedX=G.mult-_prevMult;spawnParticles(sp.x,sp.y,'gold',8);showTokenPop(sp.x-30,sp.y-40,_prevMult.toFixed(2)+'× + '+_addedX.toFixed(2)+'× = '+G.mult.toFixed(2)+'×','boost')}});
       G.tokens=G.tokens.filter(function(tk){if(tk.collected){tk.fadeOut-=G.dt*3;return tk.fadeOut>0}var sy=w2s(tk.x,tk.y).y;return sy>-100&&sy<cv.height+200});
       // Black holes
       if(G.mult>=(CFG.bhMinMult||2)&&Math.random()<G.dt*(CFG.bhSpawnRate||.8))spawnBlackHole();
