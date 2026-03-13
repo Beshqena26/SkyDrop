@@ -49,7 +49,6 @@ function _applyCfgUpdate(parsed){
   CFG._bhWeights=(CFG.bhWeights||'').split(',').map(Number).filter(function(n){return n>0});
   if(!CFG._tokenVals.length){CFG._tokenVals=[1.1,1.2,1.5,2.0,3.0,5.0,7.0,10.0];CFG._tokenWeights=[20,20,20,15,12,7,4,2]}
   if(!CFG._bhVals.length){CFG._bhVals=[5,10,15,20,30,50,100];CFG._bhWeights=[20,25,20,15,10,7,3]}
-  console.log('[SkyDrop] Config hot-reloaded:',CFG.crashMode);
 }
 // localStorage fallback (same-origin cross-tab)
 window.addEventListener('storage',function(e){
@@ -97,12 +96,10 @@ var SYNC={
     FB.onReady(function(online){
       if(!online)return;
       self.enabled=true;
-      console.log('[SkyDrop SYNC] Multiplayer sync enabled');
 
       FB.onGameRound(function(game){
         if(!game||!game.round)return;
         if(game.round>self.lastRound){
-          console.log('[SkyDrop SYNC] New round from Firebase:',game.round,'crashPt:',game.crashPoint);
           self.lastRound=game.round;
           self.roundData=game;
           self.isLeader=(game.leader===FB.getUid());
@@ -122,7 +119,6 @@ var SYNC={
   _startNextRound:function(currentRound){
     var nextRound=currentRound+1;
     var cp=genCrash();
-    console.log('[SkyDrop SYNC] Claiming round',nextRound,'crashPt:',cp);
     FB.claimNextRound(nextRound,{
       crashPoint:cp,
       betTime:BET_TIME,
@@ -934,7 +930,7 @@ function updateBhSuck(){
       // Immediately check crash after eject — don't wait for next frame
       if(G.mult>=G.crashPt&&G.phase!=='CRASH'){
         G.phase='CRASH';G.phaseTimer=0;
-        try{startCrashPhase()}catch(e){console.log('[SKYDROP] post-bh crash error:',e.message)}
+        try{startCrashPhase()}catch(e){}
       }
     }
   }
@@ -945,7 +941,6 @@ function updateBhSuck(){
     else if(s.phase==='inside')totalTime=0.4+s.timer;
     else if(s.phase==='eject')totalTime=0.7+s.timer;
     if(totalTime>3){
-      console.log('[SKYDROP] Force-canceling stuck bhSuck animation');
       // Apply multiplier if not yet applied
       if(s.phase==='suck'||s.phase==='inside'){
         var bhM=bh.mult||20;
@@ -1048,7 +1043,6 @@ function showPanel2(){
 
 // ======================== PHASE FUNCTIONS ========================
 function startBettingPhase(){
-  console.log('[SKYDROP] startBettingPhase called, current phase:', G.phase);
   // Line 1: set phase — NOTHING can prevent this
   G.phase='BETTING';
   G.phaseTimer=BET_TIME;
@@ -1099,7 +1093,6 @@ function startFreefallPhase(){
 }
 
 function startCrashPhase(){
-  console.log('[SKYDROP] startCrashPhase called, phase:', G.phase);
   // Phase and timer already set by caller
   if(G.phase!=='CRASH'){G.phase='CRASH';G.phaseTimer=0}
   // Force pilot to exist
@@ -1150,7 +1143,6 @@ function update(ts){
 
     // WATCHDOG: if stuck in FREEFALL/EXPLODE for 60+ seconds, force crash
     if((G.phase==='FREEFALL'&&G.phaseTimer>60)||(G.phase==='EXPLODE'&&G.phaseTimer>10)){
-      console.log('[SKYDROP] WATCHDOG: forcing crash, phase stuck at',G.phase,'for',G.phaseTimer.toFixed(1)+'s');
       G.pilot._bhSuck=null;G.pilot._bhScale=1;
       G.phase='CRASH';G.phaseTimer=0;
       try{startCrashPhase()}catch(e){}
@@ -1212,14 +1204,14 @@ function update(ts){
         G.camera.y+=(G.pilot.y-G.camera.y)*.1;
         // Black holes after 2x — same timing as tokens
         if(G.mult>=(CFG.bhMinMult||2)&&Math.random()<G.dt*(CFG.bhSpawnRate||.8))spawnBlackHole();
-        try{checkBlackHoleCollision();updateBhSuck()}catch(bhErr){console.log('[SKYDROP] BH error (explode):',bhErr.message);G.pilot._bhSuck=null;G.pilot._bhScale=1}
+        try{checkBlackHoleCollision();updateBhSuck()}catch(bhErr){G.pilot._bhSuck=null;G.pilot._bhScale=1}
         G.blackHoles=G.blackHoles.filter(function(bh){if(!bh.active){bh.hitAnim-=G.dt*2;return bh.hitAnim>0}var sy=w2s(bh.x,bh.y).y;return sy>-200&&sy<cv.height+200});
         // Safety: clamp mult/speed
         if(!isFinite(G.mult)||G.mult>99999)G.mult=G.crashPt+1;
         if(!isFinite(G.speed)||G.speed>10)G.speed=0.01;
         if(G.pilot._bhSuck){}else if(G.mult>=G.crashPt){
           G.phase='CRASH';G.phaseTimer=0;
-          try{startCrashPhase()}catch(e){console.log('[SKYDROP] crashPhase error:',e.message)}
+          try{startCrashPhase()}catch(e){}
         }
       }
       if(G.phaseTimer>=EXPLODE_TIME&&G.pilot.ejected&&G.phase==='EXPLODE')startFreefallPhase();
@@ -1268,17 +1260,17 @@ function update(ts){
       G.tokens=G.tokens.filter(function(tk){if(tk.collected){tk.fadeOut-=G.dt*3;return tk.fadeOut>0}var sy=w2s(tk.x,tk.y).y;return sy>-100&&sy<cv.height+200});
       // Black holes
       if(G.mult>=(CFG.bhMinMult||2)&&Math.random()<G.dt*(CFG.bhSpawnRate||.8))spawnBlackHole();
-      try{checkBlackHoleCollision();updateBhSuck()}catch(bhErr){console.log('[SKYDROP] BH error:',bhErr.message);G.pilot._bhSuck=null;G.pilot._bhScale=1}
+      try{checkBlackHoleCollision();updateBhSuck()}catch(bhErr){G.pilot._bhSuck=null;G.pilot._bhScale=1}
       // Clean up off-screen / hit black holes
       G.blackHoles=G.blackHoles.filter(function(bh){if(!bh.active){bh.hitAnim-=G.dt*2;return bh.hitAnim>0}var sy=w2s(bh.x,bh.y).y;return sy>-200&&sy<cv.height+200});
       if(Math.random()<G.dt*.15){showAlert(['💨 CROSSWIND','⚠ TURBULENCE','💨 WIND SHEAR'][Math.floor(Math.random()*3)]);sfx.play('wind');G.camera.shake=2}
       var mf=Math.floor(G.mult);if(mf>G.lastMultFloor&&mf>=2){sfx.play('tick');G.lastMultFloor=mf}
       if(Math.random()<.025)fakeFeed(G.mult*(.5+Math.random()*.6),true);
-      }catch(ffErr){console.log('[SKYDROP] Freefall error:',ffErr.message);G.pilot._bhSuck=null;G.pilot._bhScale=1}
+      }catch(ffErr){G.pilot._bhSuck=null;G.pilot._bhScale=1}
       // CRASH CHECK — runs even if above code throws
       if(!G.pilot._bhSuck&&G.mult>=G.crashPt){
         G.phase='CRASH';G.phaseTimer=0;
-        try{startCrashPhase()}catch(e){console.log('[SKYDROP] crashPhase error:',e.message)}
+        try{startCrashPhase()}catch(e){}
       }
     }
 
@@ -1287,22 +1279,19 @@ function update(ts){
       G.phaseTimer+=G.dt;
       // Safety: finish any lingering bhSuck animation
       if(G.pilot._bhSuck){updateBhSuck();G.pilot._bhSuck=null;G.pilot._bhScale=1;}
-      if(G.phaseTimer<0.1||G.phaseTimer>2.9)console.log('[SKYDROP] CRASH phase tick, timer:',G.phaseTimer.toFixed(2));
       if(G.pilot.ejected){G.pilot.y-=(15+G.phaseTimer)*G.dt;G.pilot.x+=Math.sin(G.time*1.5)*.4}
       G.alt=Math.max(0,(G.pilot.ejected?G.pilot.y:G.rocket.y)*10);updAlt();
       G.camera.y+=(G.pilot.y-G.camera.y)*.12;G.camera.cx+=(G.pilot.x-G.camera.cx)*.12;
       var rem=Math.max(0,Math.ceil(CRASH_WAIT-G.phaseTimer));
       if(G.phaseTimer>1.5)setSt('NEXT ROUND IN '+rem+'s','s5');
       if(G.phaseTimer>=CRASH_WAIT){
-        console.log('[SKYDROP] CRASH->BETTING transition NOW');
         if(SYNC.enabled){
           // Let SYNC handle next round via Firebase
           SYNC.onCrashWaitEnd();
           G.phase='WAITING';G.phaseTimer=0; // wait for Firebase to start next round
         }else{
           G.phase='BETTING';G.phaseTimer=BET_TIME;
-          try{startBettingPhase()}catch(e){console.log('[SKYDROP] NEW ROUND ERROR:',e.message)}
-          console.log('[SKYDROP] After transition, phase:', G.phase);
+          try{startBettingPhase()}catch(e){}
         }
       }
     }

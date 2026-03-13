@@ -80,7 +80,6 @@ var FB = (function() {
   // Initialize Firebase
   function init() {
     if (!_isConfigured()) {
-      console.log('[SkyDrop Firebase] Not configured — using localStorage fallback');
       _ready = true;
       _onReadyCbs.forEach(function(cb) { try { cb(false); } catch(e) {} });
       _onReadyCbs = [];
@@ -96,7 +95,6 @@ var FB = (function() {
       // Sign in anonymously
       _auth.signInAnonymously().then(function(result) {
         _uid = result.user.uid;
-        console.log('[SkyDrop Firebase] Signed in:', _uid);
 
         // Track server time offset
         _db.ref('.info/serverTimeOffset').on('value', function(snap) {
@@ -106,19 +104,16 @@ var FB = (function() {
         // Check admin status
         _db.ref('admins/' + _uid).once('value').then(function(snap) {
           _isAdmin = !!snap.val();
-          if (_isAdmin) console.log('[SkyDrop Firebase] Admin mode enabled');
           _ready = true;
           _onReadyCbs.forEach(function(cb) { try { cb(true); } catch(e) {} });
           _onReadyCbs = [];
         });
       }).catch(function(err) {
-        console.warn('[SkyDrop Firebase] Auth failed:', err.message);
         _ready = true;
         _onReadyCbs.forEach(function(cb) { try { cb(false); } catch(e) {} });
         _onReadyCbs = [];
       });
     } catch(e) {
-      console.warn('[SkyDrop Firebase] Init failed:', e.message);
       _ready = true;
       _onReadyCbs.forEach(function(cb) { try { cb(false); } catch(e2) {} });
       _onReadyCbs = [];
