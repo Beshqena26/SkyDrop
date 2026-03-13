@@ -283,7 +283,8 @@ var FB = (function() {
   function writeBet(roundNum, betData) {
     if (!_db || !_uid) return;
     betData.uid = _uid;
-    _db.ref('liveBets/' + roundNum + '/' + _uid).set(betData);
+    var slot = betData.slot || 1;
+    _db.ref('liveBets/' + roundNum + '/' + _uid + '_' + slot).set(betData);
   }
 
   // Listen for all bets in a round

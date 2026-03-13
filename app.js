@@ -216,37 +216,40 @@ var SYNC={
 
   // Update sidebar with real player bets
   _updateLiveBets:function(bets){
-    // bets = { uid1: {name,avatar,bet,cashMult,...}, uid2: ... }
+    // bets = { uid_slot: {name,avatar,bet,cashMult,...}, ... }
     if(!bets)return;
     this._liveBetsSnapshot=bets;
     var myUid=FB.getUid();
     var keys=Object.keys(bets);
-    var realCount=keys.length;
+    var betCount=keys.length;
+    // Count unique players
+    var uniqueUids={};
+    keys.forEach(function(k){var uid=(bets[k].uid||k.split('_')[0]);uniqueUids[uid]=true});
+    var playerCount=Object.keys(uniqueUids).length;
     try{
-      // Replace sidebar with real players
       var sb=document.getElementById('sbList');
       if(sb){
         sb.innerHTML='';
         var wonCount=0,totalWin=0;
-        keys.forEach(function(uid){
-          var p=bets[uid];
-          var isMe=(uid===myUid);
+        keys.forEach(function(key){
+          var p=bets[key];
+          var isMe=p.uid===myUid||(key.indexOf(myUid)===0);
           var w=p.cashMult>0&&p.win>0;
           if(w){wonCount++;totalWin+=p.win||0}
           var r2=document.createElement('div');r2.className='sb-row'+(w?' won':'')+(isMe?' me':'');
-          var displayName=isMe?('⭐ '+(p.name||'You')):(p.name||'Player');
+          var slotLabel=p.slot>1?' #'+p.slot:'';
+          var displayName=isMe?('⭐ '+(p.name||'You')+slotLabel):((p.name||'Player')+slotLabel);
           r2.innerHTML='<span class="sb-name"><span class="sb-av" style="background:'+(p.bg||'#333')+'">'+(p.avatar||'🧑‍✈️')+'</span>'+displayName+'</span><span class="sb-bet">'+(p.bet||0).toFixed(2)+'</span><span class="sb-x">'+(w?(p.cashMult||0).toFixed(2)+'x':'')+'</span><span class="sb-win">'+(w?(p.win||0).toFixed(2):'')+'</span>';
           sb.insertBefore(r2,sb.firstChild);
         });
-        G._sbBets=realCount;G._sbWon=wonCount;G._sbWinTotal=totalWin;
+        G._sbBets=betCount;G._sbWon=wonCount;G._sbWinTotal=totalWin;
         var countEl=document.getElementById('sbCount');
-        if(countEl)countEl.textContent=wonCount+'/'+realCount+' Bets';
+        if(countEl)countEl.textContent=wonCount+'/'+betCount+' Bets';
         var winEl=document.getElementById('sbWinTotal');
         if(winEl)winEl.textContent=totalWin.toFixed(2);
       }
-      // Mobile sidebar
       var mCountEl=document.getElementById('msbCount');
-      if(mCountEl)mCountEl.textContent=realCount+' Players';
+      if(mCountEl)mCountEl.textContent=playerCount+' Players';
       syncMobileSb();
     }catch(e){}
   }
@@ -768,10 +771,12 @@ function addHist(v){try{
   // Use real liveBets data when multiplayer sync is active
   if(SYNC.enabled&&SYNC._liveBetsSnapshot){
     var snap=SYNC._liveBetsSnapshot;
-    var uids=Object.keys(snap);
-    pCount=uids.length;
-    uids.forEach(function(uid){tBet+=parseFloat(snap[uid].bet)||0});
-    for(var k=0;k<Math.min(3,uids.length);k++){pNames.push(snap[uids[k]].name||'Player')}
+    var betKeys=Object.keys(snap);
+    // Count unique players
+    var uniq={};
+    betKeys.forEach(function(k){var uid=snap[k].uid||k.split('_')[0];uniq[uid]=true;tBet+=parseFloat(snap[k].bet)||0});
+    pCount=Object.keys(uniq).length;
+    for(var k=0;k<Math.min(3,betKeys.length);k++){pNames.push(snap[betKeys[k]].name||'Player')}
   } else {
     // Fallback: count from sidebar
     pCount=(G._sbBets||0)+1;

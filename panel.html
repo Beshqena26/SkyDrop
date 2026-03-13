@@ -312,8 +312,8 @@ tr:hover td{background:var(--default-100)}
     <div class="chart-card"><div class="chart-label">Crash Point Distribution</div><div id="crashDistChart"></div></div>
     <div class="chart-card"><div class="chart-label">Recent Crash Points</div><div class="dot-chart" id="crashDotChart"></div></div>
     <div class="grid-2">
-      <div class="chart-card"><div class="chart-label">Win Rate</div><div id="winRateChart"></div></div>
-      <div class="chart-card"><div class="chart-label">Profit / Loss</div><div id="pnlChart"></div></div>
+      <div class="chart-card"><div class="chart-label">All Players Win Rate</div><div id="winRateChart"></div></div>
+      <div class="chart-card"><div class="chart-label">House Profit (Cumulative)</div><div id="pnlChart"></div></div>
     </div>
   </div>
 
@@ -403,25 +403,38 @@ function loadDashboard(){
   }
 }
 function _renderDashboard(h,bh){
-  var tw=0,won=0,w=0,l=0,bestC=0;
-  bh.forEach(function(b){tw+=b.bet||0;if(b.win>0){won+=b.win;w++;if((b.mult||0)>bestC)bestC=b.mult}else l++});
-  var totP=won-tw;
-  var avg=0;if(h.length){var s=0;h.forEach(function(r){s+=r.v||0});avg=s/h.length}
-  var wr=bh.length?((w/bh.length)*100).toFixed(1):'0.0';
+  // All-player stats from embedded bets
+  var tw=0,won=0,w=0,l=0,bestC=0,uniqueUids={},totalBets=0;
+  h.forEach(function(r){
+    if(r.bets&&r.bets.length){
+      r.bets.forEach(function(b){
+        totalBets++;
+        tw+=b.bet||0;
+        if(b.win>0){won+=b.win;w++;if((b.cashMult||0)>bestC)bestC=b.cashMult}else{l++}
+        if(b.uid)uniqueUids[b.uid]=true;
+      });
+    }
+  });
+  // Fallback to bh array if no embedded bets
+  if(!totalBets){
+    bh.forEach(function(b){totalBets++;tw+=b.bet||0;if(b.win>0){won+=b.win;w++;if((b.mult||0)>bestC)bestC=b.mult}else l++});
+  }
   var hp=tw-won;
-  // Total players across all rounds
-  var totalPlayers=0;h.forEach(function(r){totalPlayers+=r.players||0});
+  var avg=0;if(h.length){var s=0;h.forEach(function(r){s+=r.v||0});avg=s/h.length}
+  var wr=totalBets?((w/totalBets)*100).toFixed(1):'0.0';
+  var uniqueCount=Object.keys(uniqueUids).length;
+  var avgBetsPerRound=h.length?(totalBets/h.length).toFixed(1):'0';
   document.getElementById('dashStats').innerHTML=
-    '<div class="stat-card"><div class="stat-value cyan">'+h.length+'</div><div class="stat-name">Rounds</div></div>'+
-    '<div class="stat-card"><div class="stat-value">'+bh.length+'</div><div class="stat-name">Total Bets</div></div>'+
-    '<div class="stat-card"><div class="stat-value gold">'+totalPlayers+'</div><div class="stat-name">Total Players</div></div>'+
-    '<div class="stat-card"><div class="stat-value">$'+tw.toFixed(2)+'</div><div class="stat-name">Wagered</div></div>'+
-    '<div class="stat-card"><div class="stat-value green">$'+won.toFixed(2)+'</div><div class="stat-name">Won</div></div>'+
-    '<div class="stat-card"><div class="stat-value '+(totP>=0?'green':'red')+'">$'+totP.toFixed(2)+'</div><div class="stat-name">Net P/L</div></div>'+
-    '<div class="stat-card"><div class="stat-value '+(wr>=50?'green':'red')+'">'+wr+'%</div><div class="stat-name">Win Rate</div></div>'+
+    '<div class="stat-card"><div class="stat-value cyan">'+h.length+'</div><div class="stat-name">Total Rounds</div></div>'+
+    '<div class="stat-card"><div class="stat-value">'+totalBets+'</div><div class="stat-name">Total Bets</div></div>'+
+    '<div class="stat-card"><div class="stat-value gold">'+uniqueCount+'</div><div class="stat-name">Unique Players</div></div>'+
+    '<div class="stat-card"><div class="stat-value cyan">'+avgBetsPerRound+'</div><div class="stat-name">Avg Bets/Round</div></div>'+
+    '<div class="stat-card"><div class="stat-value">$'+tw.toFixed(2)+'</div><div class="stat-name">Total Wagered</div></div>'+
+    '<div class="stat-card"><div class="stat-value green">$'+won.toFixed(2)+'</div><div class="stat-name">Total Paid Out</div></div>'+
+    '<div class="stat-card"><div class="stat-value '+(hp>=0?'green':'red')+'">$'+hp.toFixed(2)+'</div><div class="stat-name">House Profit</div></div>'+
+    '<div class="stat-card"><div class="stat-value '+(wr>=50?'green':'red')+'">'+wr+'%</div><div class="stat-name">Player Win Rate</div></div>'+
     '<div class="stat-card"><div class="stat-value gold">'+bestC.toFixed(2)+'x</div><div class="stat-name">Best Cashout</div></div>'+
-    '<div class="stat-card"><div class="stat-value cyan">'+avg.toFixed(2)+'x</div><div class="stat-name">Avg Crash</div></div>'+
-    '<div class="stat-card"><div class="stat-value '+(hp>=0?'green':'red')+'">$'+hp.toFixed(2)+'</div><div class="stat-name">House Profit</div></div>';
+    '<div class="stat-card"><div class="stat-value cyan">'+avg.toFixed(2)+'x</div><div class="stat-name">Avg Crash</div></div>';
   var bk=[{l:'1.0-1.5x',a:0,b:1.5,c:0,cl:'#f31260'},{l:'1.5-2.0x',a:1.5,b:2,c:0,cl:'#f5a524'},{l:'2.0-3.0x',a:2,b:3,c:0,cl:'#f5a524'},{l:'3.0-5.0x',a:3,b:5,c:0,cl:'#17c964'},{l:'5.0-10x',a:5,b:10,c:0,cl:'#17c964'},{l:'10-20x',a:10,b:20,c:0,cl:'#006FEE'},{l:'20-50x',a:20,b:50,c:0,cl:'#006FEE'},{l:'50x+',a:50,b:1e9,c:0,cl:'#7828c8'}];
   h.forEach(function(r){for(var i=0;i<bk.length;i++){if(r.v>=bk[i].a&&r.v<bk[i].b){bk[i].c++;break}}});
   var mx=Math.max.apply(null,bk.map(function(b){return b.c}))||1;
@@ -432,7 +445,13 @@ function _renderDashboard(h,bh){
   document.getElementById('crashDotChart').innerHTML=dh2||'<div class="empty-msg">No data</div>';
   var tb=bh.length||1;
   document.getElementById('winRateChart').innerHTML='<div class="bar-row"><div class="bar-name">Wins</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(w/tb*100)+'%;background:#17c964"></div></div><div class="bar-count">'+w+'</div></div><div class="bar-row"><div class="bar-name">Losses</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(l/tb*100)+'%;background:#f31260"></div></div><div class="bar-count">'+l+'</div></div>';
-  var pd=[],cm=0;bh.slice(0,30).reverse().forEach(function(b){cm+=(b.win||0)-b.bet;pd.push(cm)});
+  // House profit per round (cumulative)
+  var pd=[],cm=0;h.slice(0,30).reverse().forEach(function(r){
+    var rIn=0,rOut=0;
+    if(r.bets&&r.bets.length){r.bets.forEach(function(b){rIn+=b.bet||0;rOut+=b.win||0})}
+    else{rIn=r.totalBet||0}
+    cm+=rIn-rOut;pd.push(cm);
+  });
   var pm=Math.max.apply(null,pd.map(function(v){return Math.abs(v)}))||1;
   var ph='<div style="display:flex;align-items:center;gap:2px;height:80px">';
   pd.forEach(function(v){ph+='<div style="width:8px;height:'+Math.max(4,Math.round(Math.abs(v)/pm*100))+'%;background:'+(v>=0?'#17c964':'#f31260')+';border-radius:3px;flex-shrink:0;align-self:'+(v>=0?'flex-end':'flex-start')+'" title="$'+v.toFixed(2)+'"></div>'});
