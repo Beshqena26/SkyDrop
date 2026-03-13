@@ -788,17 +788,16 @@ function addHist(v){try{
   for(var i=0;i<2;i++){var b=G.bets[i];if(b.placed){if(b.out&&b.win>0){myResult='+$'+b.win.toFixed(2);myResultColor='var(--acc)'}else{myResult='-$'+b.amount.toFixed(2);myResultColor='var(--dng)'}}}
 
   var pNames=[];
-  // Use real liveBets data when multiplayer sync is active
-  if(SYNC.enabled&&SYNC._liveBetsSnapshot){
-    var snap=SYNC._liveBetsSnapshot;
-    var betKeys=Object.keys(snap);
-    // Count unique players
+  // Use real liveBets data when multiplayer sync is active AND snapshot has entries
+  var snap=SYNC.enabled?SYNC._liveBetsSnapshot:null;
+  var betKeys=snap?Object.keys(snap):[];
+  if(betKeys.length>0){
     var uniq={};
     betKeys.forEach(function(k){var uid=snap[k].uid||k.split('_')[0];uniq[uid]=true;tBet+=parseFloat(snap[k].bet)||0});
     pCount=Object.keys(uniq).length;
     for(var k=0;k<Math.min(3,betKeys.length);k++){pNames.push(snap[betKeys[k]].name||'Player')}
   } else {
-    // Solo play: only count real player's own bets
+    // Solo play or empty snapshot: count player's own bets
     pCount=1;
     for(var i2=0;i2<2;i2++){var b2=G.bets[i2];if(b2.placed){tBet+=b2.amount||0}}
     pNames.push('You');
