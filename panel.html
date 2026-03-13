@@ -118,15 +118,41 @@ body{background:var(--bg);color:var(--foreground);font-family:'Inter',system-ui,
 
 /* ─── Charts ─── */
 .chart-card{background:var(--content);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);margin-bottom:16px}
-.chart-label{font-size:12px;font-weight:600;color:var(--foreground);margin-bottom:16px}
-.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.chart-label{font-size:13px;font-weight:600;color:var(--foreground);margin-bottom:0}
+.chart-legend{display:flex;gap:12px;flex-wrap:wrap}
+.chart-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--foreground-400)}
+.chart-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .bar-name{font-size:11px;color:var(--foreground-400);width:75px;text-align:right;flex-shrink:0;font-weight:500}
-.bar-track{flex:1;height:8px;background:var(--default-100);border-radius:9999px;overflow:hidden}
-.bar-fill{height:100%;border-radius:9999px;transition:width .5s ease}
-.bar-count{font-size:12px;color:var(--foreground-500);width:36px;flex-shrink:0;font-weight:600;font-variant-numeric:tabular-nums}
-.dot-chart{display:flex;align-items:flex-end;gap:2px;height:100px;padding:8px 0;overflow-x:auto}
-.dot-bar{width:5px;border-radius:3px 3px 0 0;min-height:3px;flex-shrink:0;transition:opacity .15s;cursor:default}
-.dot-bar:hover{opacity:.6}
+.bar-track{flex:1;height:24px;background:var(--default-100);border-radius:var(--radius-sm);overflow:hidden;position:relative}
+.bar-fill{height:100%;border-radius:var(--radius-sm);transition:width .5s ease;display:flex;align-items:center;padding-left:8px}
+.bar-fill-label{font-size:10px;font-weight:600;color:rgba(255,255,255,.9);white-space:nowrap}
+.bar-count{font-size:12px;color:var(--foreground-500);width:44px;flex-shrink:0;font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.dot-chart-wrap{position:relative}
+.dot-chart-axis{display:flex;justify-content:space-between;padding:0 2px;margin-bottom:4px}
+.dot-chart-axis span{font-size:10px;color:var(--foreground-400);font-weight:500}
+.dot-chart{display:flex;align-items:flex-end;gap:2px;height:120px;padding:0;overflow-x:auto;border-bottom:1px solid var(--default-200)}
+.dot-bar{width:6px;border-radius:3px 3px 0 0;min-height:4px;flex-shrink:0;transition:all .15s;cursor:default;position:relative}
+.dot-bar:hover{opacity:.7;transform:scaleY(1.05)}
+.dot-bar:hover::after{content:attr(data-label);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);padding:3px 7px;background:var(--content);border:1px solid var(--default-200);border-radius:6px;font-size:10px;font-weight:600;color:var(--foreground);white-space:nowrap;z-index:5;pointer-events:none;margin-bottom:4px;box-shadow:var(--shadow-md)}
+.pnl-chart-wrap{position:relative;padding-top:4px}
+.pnl-zero-line{position:absolute;left:0;right:0;top:50%;border-top:1px dashed var(--default-300);z-index:1}
+.pnl-zero-label{position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--foreground-400);z-index:2;background:var(--content);padding:0 4px}
+.pnl-axis{display:flex;justify-content:space-between;margin-top:4px}
+.pnl-axis span{font-size:9px;color:var(--foreground-400)}
+.wr-donut-wrap{display:flex;align-items:center;gap:24px;padding:8px 0}
+.wr-donut{position:relative;width:100px;height:100px;flex-shrink:0}
+.wr-donut svg{width:100%;height:100%;transform:rotate(-90deg)}
+.wr-donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.wr-donut-pct{font-size:20px;font-weight:700;color:var(--foreground);line-height:1}
+.wr-donut-sub{font-size:9px;color:var(--foreground-400);margin-top:2px}
+.wr-stats{display:flex;flex-direction:column;gap:10px;flex:1}
+.wr-stat-row{display:flex;align-items:center;gap:8px}
+.wr-stat-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.wr-stat-info{flex:1}
+.wr-stat-name{font-size:11px;color:var(--foreground-400);font-weight:500}
+.wr-stat-val{font-size:16px;font-weight:700;color:var(--foreground)}
 
 /* ─── Table ─── */
 .table-wrap{background:var(--content);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden}
@@ -309,11 +335,17 @@ tr:hover td{background:var(--default-100)}
       <button class="btn btn-flat btn-sm" onclick="loadDashboard()">Refresh</button>
     </div>
     <div class="stat-grid" id="dashStats"></div>
-    <div class="chart-card"><div class="chart-label">Crash Point Distribution</div><div id="crashDistChart"></div></div>
-    <div class="chart-card"><div class="chart-label">Recent Crash Points</div><div class="dot-chart" id="crashDotChart"></div></div>
+    <div class="chart-card">
+      <div class="chart-header"><div class="chart-label">Crash Point Distribution</div><div class="chart-legend" id="distLegend"></div></div>
+      <div id="crashDistChart"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header"><div class="chart-label">Recent Crash Points</div><div class="chart-legend"><span class="chart-legend-item"><span class="chart-legend-dot" style="background:#f31260"></span>&lt;2x</span><span class="chart-legend-item"><span class="chart-legend-dot" style="background:#f5a524"></span>2-5x</span><span class="chart-legend-item"><span class="chart-legend-dot" style="background:#006FEE"></span>5-10x</span><span class="chart-legend-item"><span class="chart-legend-dot" style="background:#17c964"></span>10x+</span></div></div>
+      <div class="dot-chart-wrap"><div class="dot-chart-axis" id="dotAxis"></div><div class="dot-chart" id="crashDotChart"></div></div>
+    </div>
     <div class="grid-2">
-      <div class="chart-card"><div class="chart-label">All Players Win Rate</div><div id="winRateChart"></div></div>
-      <div class="chart-card"><div class="chart-label">House Profit (Cumulative)</div><div id="pnlChart"></div></div>
+      <div class="chart-card"><div class="chart-header"><div class="chart-label">All Players Win Rate</div></div><div id="winRateChart"></div></div>
+      <div class="chart-card"><div class="chart-header"><div class="chart-label">House Profit (Cumulative)</div><div id="pnlSummary" style="font-size:12px;font-weight:600"></div></div><div id="pnlChart"></div></div>
     </div>
   </div>
 
@@ -439,27 +471,73 @@ function _renderDashboard(h,bh){
     '<div class="stat-card"><div class="stat-value '+(wr>=50?'green':'red')+'">'+wr+'%</div><div class="stat-name">Player Win Rate</div></div>'+
     '<div class="stat-card"><div class="stat-value gold">'+bestC.toFixed(2)+'x</div><div class="stat-name">Best Cashout</div></div>'+
     '<div class="stat-card"><div class="stat-value cyan">'+avg.toFixed(2)+'x</div><div class="stat-name">Avg Crash</div></div>';
+  // ── Crash Distribution Chart ──
   var bk=[{l:'1.0-1.5x',a:0,b:1.5,c:0,cl:'#f31260'},{l:'1.5-2.0x',a:1.5,b:2,c:0,cl:'#f5a524'},{l:'2.0-3.0x',a:2,b:3,c:0,cl:'#f5a524'},{l:'3.0-5.0x',a:3,b:5,c:0,cl:'#17c964'},{l:'5.0-10x',a:5,b:10,c:0,cl:'#17c964'},{l:'10-20x',a:10,b:20,c:0,cl:'#006FEE'},{l:'20-50x',a:20,b:50,c:0,cl:'#006FEE'},{l:'50x+',a:50,b:1e9,c:0,cl:'#7828c8'}];
   h.forEach(function(r){for(var i=0;i<bk.length;i++){if(r.v>=bk[i].a&&r.v<bk[i].b){bk[i].c++;break}}});
   var mx=Math.max.apply(null,bk.map(function(b){return b.c}))||1;
-  var dh='';bk.forEach(function(b){dh+='<div class="bar-row"><div class="bar-name">'+b.l+'</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(b.c/mx*100)+'%;background:'+b.cl+'"></div></div><div class="bar-count">'+b.c+'</div></div>'});
+  var totalR=h.length||1;
+  var dh='';bk.forEach(function(b){
+    var pct=((b.c/totalR)*100).toFixed(1);
+    var w=Math.round(b.c/mx*100);
+    dh+='<div class="bar-row"><div class="bar-name">'+b.l+'</div><div class="bar-track"><div class="bar-fill" style="width:'+w+'%;background:'+b.cl+'"><span class="bar-fill-label">'+(w>15?pct+'%':'')+'</span></div></div><div class="bar-count">'+b.c+' <span style="color:var(--foreground-400);font-weight:400;font-size:10px">('+pct+'%)</span></div></div>'});
   document.getElementById('crashDistChart').innerHTML=dh||'<div class="empty-msg">No data</div>';
+  // Distribution legend
+  var lowPct=((bk[0].c/totalR)*100).toFixed(0),highPct=(((bk[5].c+bk[6].c+bk[7].c)/totalR)*100).toFixed(0);
+  document.getElementById('distLegend').innerHTML='<span class="chart-legend-item" style="font-size:10px;color:var(--foreground-400)">'+h.length+' rounds total</span>';
+
+  // ── Recent Crash Points Chart ──
   var rc=h.slice(0,100).reverse(),dh2='',mxV=Math.max.apply(null,rc.map(function(r){return Math.min(r.v,50)}))||10;
-  rc.forEach(function(r){var v=Math.min(r.v,50),p=Math.max(8,Math.round(v/mxV*100)),c=v>=10?'#17c964':v>=5?'#006FEE':v>=2?'#f5a524':'#f31260';dh2+='<div class="dot-bar" style="height:'+p+'%;background:'+c+'" title="'+r.v.toFixed(2)+'x (#'+r.round+')"></div>'});
+  rc.forEach(function(r){
+    var v=Math.min(r.v,50),p=Math.max(8,Math.round(v/mxV*100)),c=v>=10?'#17c964':v>=5?'#006FEE':v>=2?'#f5a524':'#f31260';
+    dh2+='<div class="dot-bar" style="height:'+p+'%;background:'+c+'" data-label="'+r.v.toFixed(2)+'x  #'+r.round+'"></div>';
+  });
   document.getElementById('crashDotChart').innerHTML=dh2||'<div class="empty-msg">No data</div>';
-  var tb=bh.length||1;
-  document.getElementById('winRateChart').innerHTML='<div class="bar-row"><div class="bar-name">Wins</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(w/tb*100)+'%;background:#17c964"></div></div><div class="bar-count">'+w+'</div></div><div class="bar-row"><div class="bar-name">Losses</div><div class="bar-track"><div class="bar-fill" style="width:'+Math.round(l/tb*100)+'%;background:#f31260"></div></div><div class="bar-count">'+l+'</div></div>';
-  // House profit per round (cumulative)
+  // Dot chart axis
+  if(rc.length){
+    var axEl=document.getElementById('dotAxis');
+    if(axEl)axEl.innerHTML='<span>Oldest</span><span>'+rc.length+' rounds</span><span>Newest</span>';
+  }
+
+  // ── Win Rate Donut ──
+  var wrPct=totalBets?Math.round((w/totalBets)*100):0;
+  var lrPct=100-wrPct;
+  var radius=40,circ=2*Math.PI*radius;
+  var winArc=(wrPct/100)*circ,lossArc=circ-winArc;
+  document.getElementById('winRateChart').innerHTML=
+    '<div class="wr-donut-wrap">'+
+      '<div class="wr-donut">'+
+        '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="'+radius+'" fill="none" stroke="var(--default-100)" stroke-width="12"/>'+
+        '<circle cx="50" cy="50" r="'+radius+'" fill="none" stroke="#17c964" stroke-width="12" stroke-dasharray="'+winArc+' '+lossArc+'" stroke-linecap="round"/>'+
+        (lrPct>0?'<circle cx="50" cy="50" r="'+radius+'" fill="none" stroke="#f31260" stroke-width="12" stroke-dasharray="'+lossArc+' '+winArc+'" stroke-dashoffset="-'+winArc+'" stroke-linecap="round"/>':'')+
+        '</svg>'+
+        '<div class="wr-donut-center"><div class="wr-donut-pct">'+wrPct+'%</div><div class="wr-donut-sub">win rate</div></div>'+
+      '</div>'+
+      '<div class="wr-stats">'+
+        '<div class="wr-stat-row"><div class="wr-stat-dot" style="background:#17c964"></div><div class="wr-stat-info"><div class="wr-stat-name">Wins</div><div class="wr-stat-val" style="color:#17c964">'+w+'</div></div></div>'+
+        '<div class="wr-stat-row"><div class="wr-stat-dot" style="background:#f31260"></div><div class="wr-stat-info"><div class="wr-stat-name">Losses</div><div class="wr-stat-val" style="color:#f31260">'+l+'</div></div></div>'+
+        '<div class="wr-stat-row"><div class="wr-stat-dot" style="background:var(--default-300)"></div><div class="wr-stat-info"><div class="wr-stat-name">Total Bets</div><div class="wr-stat-val">'+totalBets+'</div></div></div>'+
+      '</div>'+
+    '</div>';
+
+  // ── House Profit Chart (cumulative) ──
   var pd=[],cm=0;h.slice(0,30).reverse().forEach(function(r){
     var rIn=0,rOut=0,bets=r.bets;
     if(bets){var arr=Array.isArray(bets)?bets:Object.keys(bets).map(function(k){return bets[k]});arr.forEach(function(b){if(b){rIn+=b.bet||0;rOut+=b.win||0}})}
     else{rIn=r.totalBet||0}
     cm+=rIn-rOut;pd.push(cm);
   });
+  // PnL summary
+  var pnlEl=document.getElementById('pnlSummary');
+  if(pnlEl&&pd.length){var finalPnl=pd[pd.length-1];pnlEl.innerHTML='<span style="color:'+(finalPnl>=0?'#17c964':'#f31260')+'">'+(finalPnl>=0?'+':'')+finalPnl.toFixed(2)+'$</span>'}
   var pm=Math.max.apply(null,pd.map(function(v){return Math.abs(v)}))||1;
-  var ph='<div style="display:flex;align-items:center;gap:2px;height:80px">';
-  pd.forEach(function(v){ph+='<div style="width:8px;height:'+Math.max(4,Math.round(Math.abs(v)/pm*100))+'%;background:'+(v>=0?'#17c964':'#f31260')+';border-radius:3px;flex-shrink:0;align-self:'+(v>=0?'flex-end':'flex-start')+'" title="$'+v.toFixed(2)+'"></div>'});
-  ph+='</div>';document.getElementById('pnlChart').innerHTML=pd.length?ph:'<div class="empty-msg">No data</div>';
+  var ph='<div class="pnl-chart-wrap"><div class="pnl-zero-line"></div><div class="pnl-zero-label">$0</div>';
+  ph+='<div style="display:flex;align-items:center;gap:2px;height:100px;position:relative;z-index:1">';
+  pd.forEach(function(v,i){
+    var hPct=Math.max(6,Math.round(Math.abs(v)/pm*48));
+    ph+='<div class="dot-bar" style="width:8px;height:'+hPct+'%;background:'+(v>=0?'#17c964':'#f31260')+';border-radius:3px;flex-shrink:0;align-self:'+(v>=0?'flex-end':'flex-start')+';margin-'+(v>=0?'bottom':'top')+':50%;" data-label="$'+v.toFixed(2)+'"></div>';
+  });
+  ph+='</div><div class="pnl-axis"><span>Round '+(Math.max(1,h.length-29))+'</span><span>Last 30 rounds</span><span>Round '+h.length+'</span></div></div>';
+  document.getElementById('pnlChart').innerHTML=pd.length?ph:'<div class="empty-msg">No data</div>';
 }
 
 function loadRoundHistory(){
